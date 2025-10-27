@@ -1,0 +1,22 @@
+# LulzSec ULTIMATE Forensic Scanner v9.0 - Dependencies
+
+# Core Cryptography
+ecdsa>=0.18.0
+mnemonic>=0.20
+pycryptodome>=3.19.0
+base58>=2.1.1
+
+# Blockchain & APIs
+requests>=2.31.0
+
+# GUI
+# tkinter is built-in with Python
+
+# Database
+# sqlite3 is built-in with Python
+
+# Data Processing
+# json, re, hashlib, etc. are built-in
+
+# Optional for enhanced features
+colorama>=0.4.6  # For colored terminal output
