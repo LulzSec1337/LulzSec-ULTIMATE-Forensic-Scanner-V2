@@ -143,7 +143,11 @@ class LulzSecAdvancedGUI:
         self.balance_checker = AdvancedBalanceChecker(self.api_config)
         self.email_validator = EmailValidator()
         self.sms_detector = SMSAPIDetector()
-        self.key_extractor = ComprehensivePrivateKeyExtractor()
+        self.key_extractor = ComprehensivePrivateKeyExtractor(
+            self.crypto_utils, 
+            self.balance_checker, 
+            lambda msg, typ: self.add_log(msg, typ) if hasattr(self, 'add_log') else None
+        )
         
         # Scanning state
         self.is_scanning = False
