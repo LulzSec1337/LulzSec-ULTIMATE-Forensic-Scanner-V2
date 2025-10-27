@@ -36,9 +36,9 @@ admin@test.com:test123
 # Private key (hex format)
 e9873d79c6d87dc0fb6a5778633389f4453213303da61f20bd67fc233aa33262
 
-# SMS API
+# SMS API (example patterns)
 Twilio Account SID: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-Twilio Auth Token: 1234567890abcdef1234567890abcdef
+Twilio Auth Token: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 """
 
 def test_extraction():

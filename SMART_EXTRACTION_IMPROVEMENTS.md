@@ -116,7 +116,7 @@ investor@outlook.com:CryptoLife456
 🔹 Provider: Twilio
 --------------------------------------------------------------------------------
   sid            : ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  auth_token     : 1234567890abcdef1234567890abcdef
+  auth_token     : xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 🔹 Provider: Nexmo
 --------------------------------------------------------------------------------
