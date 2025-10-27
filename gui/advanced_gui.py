@@ -27,6 +27,7 @@ from database.db_manager import EnhancedDatabaseManager
 from validators.email_validator import EmailValidator
 from validators.sms_detector import SMSAPIDetector
 from extractors.private_key_extractor import ComprehensivePrivateKeyExtractor
+from extractors.url_extractor import AdvancedURLExtractor
 
 
 class EnhancedNeonTheme:
@@ -153,6 +154,9 @@ class LulzSecAdvancedGUI:
         
         # ULTRA-ADVANCED SCANNER
         self.ultra_scanner = UltraAdvancedScanner(self.crypto_utils, self.db)
+        
+        # URL EXTRACTOR
+        self.url_extractor = AdvancedURLExtractor()
         
         # Scanning state
         self.is_scanning = False
@@ -929,7 +933,37 @@ class LulzSecAdvancedGUI:
             # Update phase
             self.metrics['scan_phase'] = 'Initializing Ultra Scan...'
             self.add_log("🔥 ULTRA-ADVANCED SCANNER INITIALIZED", "success")
-            self.add_log("📊 Loading 50+ seed patterns, 30+ key formats, 100+ API patterns...", "info")
+            self.add_log("📊 Loading extraction patterns:", "info")
+            self.add_log("   • 50+ seed phrase patterns (BIP39 validated)", "info")
+            self.add_log("   • 30+ private key formats (all blockchains)", "info")
+            self.add_log("   • 8+ wallet networks (ETH, BTC, TRX, SOL, LTC, DOGE, BNB, XRP)", "info")
+            self.add_log("   • Smart duplicate removal & fake data filtering", "info")
+            self.add_log("   • Real-time validation & address derivation", "info")
+            self.add_log("", "info")
+            
+            # Clear previous results
+            self.wallets_text.delete(1.0, tk.END)
+            self.seeds_text.delete(1.0, tk.END)
+            self.creds_text.delete(1.0, tk.END)
+            self.sms_text.delete(1.0, tk.END)
+            
+            # Add headers to tabs
+            self.wallets_text.insert(tk.END, "💰 WALLET ADDRESSES\n")
+            self.wallets_text.insert(tk.END, "=" * 80 + "\n")
+            self.wallets_text.insert(tk.END, "Extracting wallet addresses from all supported networks...\n\n")
+            
+            self.seeds_text.insert(tk.END, "🌱 SEED PHRASES & PRIVATE KEYS\n")
+            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
+            self.seeds_text.insert(tk.END, "Extracting and validating BIP39 seed phrases...\n")
+            self.seeds_text.insert(tk.END, "All seeds will be validated and tested against BIP39 wordlist\n\n")
+            
+            self.creds_text.insert(tk.END, "🔐 CREDENTIALS\n")
+            self.creds_text.insert(tk.END, "=" * 80 + "\n")
+            self.creds_text.insert(tk.END, "Extracting email:password and username:password combinations...\n\n")
+            
+            self.sms_text.insert(tk.END, "📱 SMS API CREDENTIALS\n")
+            self.sms_text.insert(tk.END, "=" * 80 + "\n")
+            self.sms_text.insert(tk.END, "Detecting SMS API credentials (Twilio, Nexmo, Plivo, etc.)...\n\n")
             
             # Count files first
             total_files = 0
@@ -1005,18 +1039,35 @@ class LulzSecAdvancedGUI:
                         total_wallets += count
                         self.add_log(f"💰 {file_name}: Found {count} wallet address(es)", "success")
                         
-                        for wallet in results['wallets'][:10]:  # Limit display
+                        # Group by network for better display
+                        by_network = {}
+                        for wallet in results['wallets']:
                             network = wallet['network']
-                            address = wallet['address']
-                            self.wallets_text.insert(tk.END, f"{network}: {address}\n")
-                            self.wallets_text.see(tk.END)
+                            if network not in by_network:
+                                by_network[network] = []
+                            by_network[network].append(wallet['address'])
+                        
+                        # Display grouped by network
+                        for network, addresses in by_network.items():
+                            self.wallets_text.insert(tk.END, f"\n💰 {network} ({len(addresses)} addresses):\n")
+                            self.wallets_text.insert(tk.END, "-" * 80 + "\n")
                             
-                            # Save to database
-                            self.db.add_wallet({
-                                'address': address,
-                                'network': network,
-                                'source_file': file_path
-                            })
+                            # Show first 20 addresses
+                            for addr in list(set(addresses))[:20]:
+                                self.wallets_text.insert(tk.END, f"  {addr}\n")
+                                
+                                # Save to database
+                                self.db.add_wallet({
+                                    'address': addr,
+                                    'network': network,
+                                    'source_file': file_path
+                                })
+                            
+                            if len(addresses) > 20:
+                                self.wallets_text.insert(tk.END, f"  ... and {len(addresses) - 20} more\n")
+                            
+                            self.wallets_text.insert(tk.END, "\n")
+                            self.wallets_text.see(tk.END)
                     
                     # Process seed phrases
                     if results['seeds']:
@@ -1026,8 +1077,14 @@ class LulzSecAdvancedGUI:
                         
                         for seed in results['seeds']:
                             word_count = len(seed.split())
-                            self.seeds_text.insert(tk.END, f"✅ [{word_count} words]: {seed}\n")
-                            self.seeds_text.insert(tk.END, "-" * 80 + "\n")
+                            
+                            # Display in seeds tab with better formatting
+                            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
+                            self.seeds_text.insert(tk.END, f"🌱 SEED PHRASE ({word_count} words) - VALID ✅\n")
+                            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
+                            self.seeds_text.insert(tk.END, f"{seed}\n")
+                            self.seeds_text.insert(tk.END, f"Source: {file_name}\n")
+                            self.seeds_text.insert(tk.END, "=" * 80 + "\n\n")
                             self.seeds_text.see(tk.END)
                             
                             # Save to database
@@ -1041,18 +1098,27 @@ class LulzSecAdvancedGUI:
                             # Derive addresses if enabled
                             if self.opt_vars.get('derive_networks', tk.BooleanVar(value=True)).get():
                                 try:
+                                    self.seeds_text.insert(tk.END, "📊 Derived Addresses:\n")
+                                    self.seeds_text.insert(tk.END, "-" * 80 + "\n")
+                                    
                                     all_addresses = self.crypto_utils.derive_all_addresses_from_seed(seed)
                                     for network, addr_info in all_addresses.items():
                                         if 'address' in addr_info:
+                                            address = addr_info['address']
+                                            self.seeds_text.insert(tk.END, f"  {network:8s}: {address}\n")
                                             self.db.add_derived_address({
                                                 'seed_phrase': seed,
                                                 'network': network,
-                                                'address': addr_info['address']
+                                                'address': address
                                             })
-                                            # Show in details
-                                            self.details_text.insert(tk.END, f"{network}: {addr_info['address']}\n")
+                                    
+                                    self.seeds_text.insert(tk.END, "-" * 80 + "\n\n")
+                                    self.seeds_text.see(tk.END)
                                 except Exception as e:
-                                    pass
+                                    self.seeds_text.insert(tk.END, f"  ⚠️ Derivation error: {str(e)[:50]}\n\n")
+                        
+                        # Force update to show seeds immediately
+                        self.root.update_idletasks()
                     
                     # Process private keys
                     if results['private_keys']:
@@ -1063,16 +1129,25 @@ class LulzSecAdvancedGUI:
                         for key_data in results['private_keys'][:10]:
                             key_type = key_data['type']
                             key = key_data['key']
-                            self.seeds_text.insert(tk.END, f"🔑 {key_type}: {key[:64]}...\n")
-                            self.seeds_text.see(tk.END)
+                            
+                            # Display in seeds tab with clear formatting
+                            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
+                            self.seeds_text.insert(tk.END, f"🔑 PRIVATE KEY - {key_type}\n")
+                            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
+                            self.seeds_text.insert(tk.END, f"{key}\n")
+                            self.seeds_text.insert(tk.END, f"Source: {file_name}\n")
                             
                             # Try to derive address
                             try:
                                 if key_type in ['RAW_HEX_64', 'RAW_HEX_66', 'ETH_PRIVATE_KEY']:
+                                    self.seeds_text.insert(tk.END, "📊 Derived Addresses:\n")
+                                    self.seeds_text.insert(tk.END, "-" * 80 + "\n")
+                                    
                                     for network in ['ETH', 'BTC', 'TRX']:
                                         try:
                                             addr = self.crypto_utils.private_key_to_address(key, network)
                                             if addr:
+                                                self.seeds_text.insert(tk.END, f"  {network:8s}: {addr}\n")
                                                 self.db.add_wallet({
                                                     'address': addr,
                                                     'network': network,
@@ -1081,26 +1156,42 @@ class LulzSecAdvancedGUI:
                                                 })
                                         except:
                                             pass
+                                    
+                                    self.seeds_text.insert(tk.END, "-" * 80 + "\n")
                             except:
                                 pass
+                            
+                            self.seeds_text.insert(tk.END, "=" * 80 + "\n\n")
+                            self.seeds_text.see(tk.END)
                     
                     # Process credentials
                     if results['credentials']:
                         count = len(results['credentials'])
                         total_creds += count
-                        self.add_log(f"🔐 {file_name}: Found {count} credential(s)", "success")
                         
-                        for cred in results['credentials'][:20]:
-                            username = cred['username']
-                            password = cred['password']
-                            self.creds_text.insert(tk.END, f"{username}:{password}\n")
-                            self.creds_text.see(tk.END)
+                        if count > 0:
+                            self.add_log(f"🔐 {file_name}: Found {count} credential(s)", "success")
                             
-                            self.db.add_credential({
-                                'email': username,
-                                'password': password,
-                                'source_file': file_path
-                            })
+                            # Display with better formatting
+                            self.creds_text.insert(tk.END, f"\n📄 From: {file_name} ({count} credentials)\n")
+                            self.creds_text.insert(tk.END, "-" * 80 + "\n")
+                            
+                            for cred in results['credentials'][:50]:  # Show first 50
+                                username = cred['username']
+                                password = cred['password']
+                                self.creds_text.insert(tk.END, f"{username}:{password}\n")
+                                self.creds_text.see(tk.END)
+                                
+                                self.db.add_credential({
+                                    'email': username,
+                                    'password': password,
+                                    'source_file': file_path
+                                })
+                            
+                            if count > 50:
+                                self.creds_text.insert(tk.END, f"... and {count - 50} more credentials\n")
+                            
+                            self.creds_text.insert(tk.END, "\n")
                     
                     # Process URLs
                     if results['urls']:
@@ -1116,22 +1207,33 @@ class LulzSecAdvancedGUI:
                     if results['sms_apis']:
                         count = len(results['sms_apis'])
                         total_sms += count
-                        self.add_log(f"📱 {file_name}: Found {count} SMS API credential(s)", "success")
                         
-                        for api in results['sms_apis']:
-                            provider = api['provider']
-                            self.sms_text.insert(tk.END, f"📱 {provider}:\n")
-                            for key, value in api.items():
-                                if key != 'provider' and value:
-                                    self.sms_text.insert(tk.END, f"  {key}: {value}\n")
-                            self.sms_text.insert(tk.END, "-" * 60 + "\n")
-                            self.sms_text.see(tk.END)
+                        if count > 0:
+                            self.add_log(f"📱 {file_name}: Found {count} SMS API credential(s)", "success")
                             
-                            self.db.add_sms_api({
-                                'provider': provider,
-                                'api_key': str(api),
-                                'source_file': file_path
-                            })
+                            self.sms_text.insert(tk.END, "\n" + "=" * 80 + "\n")
+                            self.sms_text.insert(tk.END, f"📱 SMS APIs from: {file_name}\n")
+                            self.sms_text.insert(tk.END, "=" * 80 + "\n\n")
+                            
+                            for api in results['sms_apis']:
+                                provider = api['provider']
+                                self.sms_text.insert(tk.END, f"� Provider: {provider}\n")
+                                self.sms_text.insert(tk.END, "-" * 80 + "\n")
+                                
+                                for key, value in api.items():
+                                    if key != 'provider' and value:
+                                        self.sms_text.insert(tk.END, f"  {key:15s}: {value}\n")
+                                
+                                self.sms_text.insert(tk.END, "\n")
+                                self.sms_text.see(tk.END)
+                                
+                                self.db.add_sms_api({
+                                    'provider': provider,
+                                    'api_key': str(api),
+                                    'source_file': file_path
+                                })
+                            
+                            self.sms_text.insert(tk.END, "=" * 80 + "\n\n")
                     
                     # Process social tokens
                     if results['social_tokens']:
@@ -1159,38 +1261,54 @@ class LulzSecAdvancedGUI:
                     if files_scanned % 100 == 0:
                         self.add_log(f"⚠️ Error scanning {file_name}: {str(e)[:50]}", "warning")
                 
-                # Update display periodically
-                if files_scanned % 10 == 0:
+                # Update display more frequently for better responsiveness
+                if files_scanned % 5 == 0:  # Update every 5 files instead of 10
                     self.root.update_idletasks()
+                
+                # Log progress every 50 files
+                if files_scanned % 50 == 0:
+                    self.add_log(f"📊 Progress: {files_scanned}/{total_files} files ({progress:.1f}%) - Speed: {speed:.1f} files/s", "info")
             
             # Final update
             self.progress_var.set(100)
             self.progress_percent_var.set("100%")
             
-            # Comprehensive summary
+            # Comprehensive summary with better formatting
             summary = f"""
-╔══════════════════════════════════════════════════════════════╗
-║           🔥 ULTRA SCAN COMPLETE - MAXIMUM EXTRACTION 🔥     ║
-╚══════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════╗
+║           🔥 ULTRA SCAN COMPLETE - MAXIMUM EXTRACTION 🔥                ║
+╚══════════════════════════════════════════════════════════════════════════╝
 
-📊 SCAN STATISTICS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📁 Files Scanned:        {files_scanned:,}
-💰 Wallet Addresses:     {total_wallets:,}
-🌱 Seed Phrases (VALID): {total_seeds:,}
-🔑 Private Keys:         {total_keys:,}
-🔐 Credentials:          {total_creds:,}
-🔗 URLs Extracted:       {total_urls:,}
-📱 SMS APIs:             {total_sms:,}
-💬 Social Tokens:        {total_tokens:,}
-🔑 API Keys:             {total_apis:,}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 EXTRACTION RESULTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📁 Files Processed:       {files_scanned:,} / {total_files:,}
+💰 Wallet Addresses:      {total_wallets:,}
+🌱 Seed Phrases (VALID):  {total_seeds:,}
+🔑 Private Keys:          {total_keys:,}
+🔐 Credentials:           {total_creds:,}
+🔗 URLs Extracted:        {total_urls:,}
+📱 SMS APIs:              {total_sms:,}
+💬 Social Tokens:         {total_tokens:,}
+🔑 API Keys:              {total_apis:,}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⏱️ Scan Time: {elapsed:.2f} seconds
-⚡ Speed: {speed:.2f} files/second
+⏱️  Scan Time:     {elapsed:.2f} seconds ({elapsed/60:.1f} minutes)
+⚡ Average Speed:  {speed:.2f} files/second
+🎯 Success Rate:   {(files_scanned/total_files*100):.1f}%
 
-✅ All data saved to database: lulzsec_wallets_ultimate_v9.db
-💾 Use Export menu to save in your preferred format
+✅ SMART FEATURES APPLIED:
+   • BIP39 seed phrase validation
+   • Fake/test data filtering
+   • Duplicate removal
+   • Address derivation from seeds
+   • Private key validation
+   • Credential format validation
+
+💾 DATABASE: All findings saved to lulzsec_wallets_ultimate_v9.db
+📊 TABS: Check all tabs (Wallets, Seeds, Credentials, SMS APIs, Logs)
+� EXPORT: Use Export menu to save results in various formats
+
+{"🎉 HIGH VALUE SCAN!" if total_seeds > 0 or total_keys > 0 else ""}
             """
             self.add_log(summary, "success")
             
@@ -1510,7 +1628,200 @@ class LulzSecAdvancedGUI:
         messagebox.showinfo("Tool", "Bulk Balance Checker - Coming soon")
     
     def search_url_tool(self):
-        messagebox.showinfo("Tool", "URL Search Tool - Coming soon")
+        """Advanced URL/Domain search tool"""
+        # Create dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title("🔍 Advanced URL/Domain Search")
+        dialog.geometry("900x700")
+        dialog.configure(bg=self.theme.colors['bg'])
+        
+        # Header
+        tk.Label(dialog, text="🔍 SEARCH SPECIFIC WEBSITE/DOMAIN",
+                bg=self.theme.colors['bg'],
+                fg=self.theme.colors['accent'],
+                font=('Segoe UI', 14, 'bold')).pack(pady=10)
+        
+        tk.Label(dialog, text="Find all credentials, cookies, tokens for a specific domain",
+                bg=self.theme.colors['bg'],
+                fg=self.theme.colors['fg_secondary'],
+                font=self.theme.fonts['small']).pack(pady=5)
+        
+        # Input frame
+        input_frame = tk.Frame(dialog, bg=self.theme.colors['bg_card'], padx=20, pady=15)
+        input_frame.pack(fill=tk.X, padx=20, pady=10)
+        
+        tk.Label(input_frame, text="Target Domain:",
+                bg=self.theme.colors['bg_card'],
+                fg=self.theme.colors['fg'],
+                font=('Segoe UI', 10, 'bold')).pack(anchor=tk.W)
+        
+        domain_var = tk.StringVar()
+        domain_entry = tk.Entry(input_frame, textvariable=domain_var,
+                               bg=self.theme.colors['bg_tertiary'],
+                               fg=self.theme.colors['fg'],
+                               font=('Segoe UI', 11),
+                               insertbackground=self.theme.colors['accent'],
+                               width=50)
+        domain_entry.pack(fill=tk.X, pady=5, ipady=5)
+        
+        # Quick domains
+        quick_frame = tk.Frame(input_frame, bg=self.theme.colors['bg_card'])
+        quick_frame.pack(fill=tk.X, pady=10)
+        
+        tk.Label(quick_frame, text="Quick Select:",
+                bg=self.theme.colors['bg_card'],
+                fg=self.theme.colors['fg_secondary'],
+                font=self.theme.fonts['small']).pack(side=tk.LEFT, padx=(0, 10))
+        
+        quick_domains = ['binance.com', 'coinbase.com', 'gmail.com', 'outlook.com', 'paypal.com']
+        for domain in quick_domains:
+            tk.Button(quick_frame, text=domain,
+                     command=lambda d=domain: domain_var.set(d),
+                     bg=self.theme.colors['neon_blue'],
+                     fg='#ffffff',
+                     font=self.theme.fonts['small'],
+                     borderwidth=0, relief='flat',
+                     padx=8, pady=4, cursor='hand2').pack(side=tk.LEFT, padx=2)
+        
+        # Results frame
+        results_frame = tk.LabelFrame(dialog, text="  Results  ",
+                                     bg=self.theme.colors['bg_secondary'],
+                                     fg=self.theme.colors['neon_yellow'],
+                                     font=('Segoe UI', 10, 'bold'))
+        results_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        results_text = scrolledtext.ScrolledText(results_frame,
+                                                 bg=self.theme.colors['bg_tertiary'],
+                                                 fg=self.theme.colors['fg'],
+                                                 font=self.theme.fonts['mono_small'],
+                                                 wrap=tk.WORD)
+        results_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        def perform_search():
+            domain = domain_var.get().strip()
+            if not domain:
+                messagebox.showwarning("Input Required", "Please enter a domain to search")
+                return
+            
+            results_text.delete(1.0, tk.END)
+            results_text.insert(tk.END, f"🔍 Searching for: {domain}\n")
+            results_text.insert(tk.END, "=" * 80 + "\n\n")
+            
+            # Get last scan directory
+            last_dir = self.dir_var.get()
+            if not last_dir or not os.path.exists(last_dir):
+                results_text.insert(tk.END, "⚠️ Please run a scan first to search results\n")
+                return
+            
+            # Search all scanned files
+            found_count = 0
+            total_creds = []
+            total_urls = []
+            total_cookies = []
+            total_tokens = []
+            
+            for root, dirs, files in os.walk(last_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read(5 * 1024 * 1024)  # Max 5MB
+                        
+                        # Search for domain
+                        search_result = self.url_extractor.search_domain(content, domain)
+                        
+                        if search_result['found']:
+                            found_count += 1
+                            results_text.insert(tk.END, f"\n📄 File: {os.path.basename(file_path)}\n")
+                            results_text.insert(tk.END, "-" * 80 + "\n")
+                            
+                            if search_result['urls']:
+                                results_text.insert(tk.END, f"🔗 URLs ({len(search_result['urls'])}):\n")
+                                for url in search_result['urls'][:10]:
+                                    results_text.insert(tk.END, f"  • {url}\n")
+                                    total_urls.append(url)
+                                results_text.insert(tk.END, "\n")
+                            
+                            if search_result['credentials']:
+                                results_text.insert(tk.END, f"🔐 Credentials ({len(search_result['credentials'])}):\n")
+                                for cred in search_result['credentials'][:10]:
+                                    results_text.insert(tk.END, f"  • {cred.get('email', 'N/A')}:{cred.get('password', 'N/A')}\n")
+                                    total_creds.append(cred)
+                                results_text.insert(tk.END, "\n")
+                            
+                            if search_result['cookies']:
+                                results_text.insert(tk.END, f"🍪 Cookies ({len(search_result['cookies'])}):\n")
+                                for cookie in search_result['cookies'][:5]:
+                                    results_text.insert(tk.END, f"  • {cookie}\n")
+                                    total_cookies.append(cookie)
+                                results_text.insert(tk.END, "\n")
+                            
+                            if search_result['tokens']:
+                                results_text.insert(tk.END, f"🔑 Tokens ({len(search_result['tokens'])}):\n")
+                                for token in search_result['tokens'][:5]:
+                                    results_text.insert(tk.END, f"  • {token}\n")
+                                    total_tokens.append(token)
+                                results_text.insert(tk.END, "\n")
+                    
+                    except:
+                        continue
+            
+            # Summary
+            results_text.insert(tk.END, "\n" + "=" * 80 + "\n")
+            results_text.insert(tk.END, "📊 SEARCH SUMMARY\n")
+            results_text.insert(tk.END, "=" * 80 + "\n")
+            results_text.insert(tk.END, f"Files with matches: {found_count}\n")
+            results_text.insert(tk.END, f"Total URLs found: {len(total_urls)}\n")
+            results_text.insert(tk.END, f"Total Credentials: {len(total_creds)}\n")
+            results_text.insert(tk.END, f"Total Cookies: {len(total_cookies)}\n")
+            results_text.insert(tk.END, f"Total Tokens: {len(total_tokens)}\n")
+            
+            if found_count == 0:
+                results_text.insert(tk.END, "\n⚠️ No matches found for this domain\n")
+        
+        # Buttons
+        btn_frame = tk.Frame(dialog, bg=self.theme.colors['bg'])
+        btn_frame.pack(fill=tk.X, padx=20, pady=10)
+        
+        tk.Button(btn_frame, text="🔍 Search",
+                 command=perform_search,
+                 bg=self.theme.colors['accent'],
+                 fg='#000000',
+                 font=('Segoe UI', 11, 'bold'),
+                 borderwidth=0, relief='flat',
+                 padx=20, pady=10, cursor='hand2').pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(btn_frame, text="💾 Export Results",
+                 command=lambda: self.export_text_content(results_text.get(1.0, tk.END), f"{domain_var.get()}_search_results.txt"),
+                 bg=self.theme.colors['neon_blue'],
+                 fg='#ffffff',
+                 font=('Segoe UI', 10, 'bold'),
+                 borderwidth=0, relief='flat',
+                 padx=20, pady=10, cursor='hand2').pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(btn_frame, text="❌ Close",
+                 command=dialog.destroy,
+                 bg=self.theme.colors['danger'],
+                 fg='#ffffff',
+                 font=('Segoe UI', 10, 'bold'),
+                 borderwidth=0, relief='flat',
+                 padx=20, pady=10, cursor='hand2').pack(side=tk.RIGHT, padx=5)
+    
+    def export_text_content(self, content: str, filename: str):
+        """Export text content to file"""
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            initialfile=filename,
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                messagebox.showinfo("Success", f"Results exported to:\n{file_path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export:\n{e}")
     
     def open_api_settings(self):
         messagebox.showinfo("Settings", "API Management - Coming soon")

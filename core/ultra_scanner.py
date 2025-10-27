@@ -209,6 +209,45 @@ class UltraAdvancedScanner:
         
         return results
     
+    def scan_file_content(self, content: str, source_name: str = "content") -> Dict[str, Any]:
+        """
+        Scan text content directly (useful for testing)
+        
+        Args:
+            content: Text content to scan
+            source_name: Name for logging/tracking
+        
+        Returns:
+            Dictionary with all extracted data
+        """
+        results = {
+            'file': source_name,
+            'wallets': [],
+            'seeds': [],
+            'private_keys': [],
+            'credentials': [],
+            'urls': [],
+            'sms_apis': [],
+            'social_tokens': [],
+            'api_keys': []
+        }
+        
+        try:
+            # Extract everything
+            results['wallets'] = self.extract_wallets(content)
+            results['seeds'] = self.extract_seeds_comprehensive(content)
+            results['private_keys'] = self.extract_private_keys(content)
+            results['credentials'] = self.extract_credentials(content)
+            results['urls'] = self.extract_urls(content)
+            results['sms_apis'] = self.extract_sms_apis(content)
+            results['social_tokens'] = self.extract_social_tokens(content)
+            results['api_keys'] = self.extract_api_keys(content)
+            
+        except Exception as e:
+            print(f"Error scanning content: {e}")
+        
+        return results
+    
     def extract_wallets(self, content: str) -> List[Dict]:
         """Extract all wallet addresses with maximum patterns"""
         wallets = []
@@ -243,13 +282,36 @@ class UltraAdvancedScanner:
     
     def extract_seeds_comprehensive(self, content: str) -> List[str]:
         """
-        ULTRA-AGGRESSIVE seed phrase extraction
-        Uses 50+ patterns and techniques
+        ULTRA-AGGRESSIVE seed phrase extraction with SMART validation
+        Uses 50+ patterns and techniques with duplicate removal
         """
         seeds = set()
         content_lower = content.lower()
         
-        # Method 1: Standard regex patterns
+        # Method 1: Look for obvious seed phrase markers
+        seed_markers = [
+            r'(?:seed\s*phrase|mnemonic|recovery\s*phrase|backup\s*phrase)[\s\:=\->\|]+([a-z\s]{100,300})',
+            r'(?:12|24)\s*words?[\s\:=\->\|]+([a-z\s]{100,300})',
+        ]
+        
+        for marker in seed_markers:
+            try:
+                matches = re.findall(marker, content_lower, re.IGNORECASE)
+                for match in matches:
+                    cleaned = re.sub(r'[^a-z\s]', ' ', match)
+                    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+                    words = cleaned.split()
+                    
+                    # Try different lengths
+                    for length in [12, 15, 18, 21, 24]:
+                        if len(words) >= length:
+                            candidate = ' '.join(words[:length])
+                            if self._validate_and_filter_seed(candidate):
+                                seeds.add(candidate)
+            except:
+                continue
+        
+        # Method 2: Standard regex patterns
         for pattern in self.seed_patterns:
             try:
                 matches = re.findall(pattern, content_lower, re.MULTILINE | re.IGNORECASE)
@@ -260,22 +322,20 @@ class UltraAdvancedScanner:
                     cleaned = re.sub(r'[^a-z\s]', ' ', match)
                     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
                     
-                    word_count = len(cleaned.split())
-                    if word_count in [12, 15, 18, 21, 24]:
-                        if self.crypto_utils.validate_seed_phrase(cleaned):
-                            seeds.add(cleaned)
+                    if self._validate_and_filter_seed(cleaned):
+                        seeds.add(cleaned)
             except:
                 continue
         
-        # Method 2: Line-by-line analysis
+        # Method 3: Line-by-line sliding window analysis
         lines = content_lower.split('\n')
         buffer = []
         
         for line in lines:
-            # Clean line
+            # Clean line - keep only lowercase letters and spaces
             cleaned = re.sub(r'[^a-z\s]', ' ', line)
             cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-            words = cleaned.split()
+            words = [w for w in cleaned.split() if len(w) >= 3 and len(w) <= 8]
             
             # Add to buffer
             buffer.extend(words)
@@ -284,56 +344,113 @@ class UltraAdvancedScanner:
             if len(buffer) > 30:
                 buffer = buffer[-30:]
             
-            # Check all possible seed lengths
+            # Check all possible seed lengths with sliding window
             for length in [12, 15, 18, 21, 24]:
                 if len(buffer) >= length:
+                    # Try from end
                     candidate = ' '.join(buffer[-length:])
-                    if self.crypto_utils.validate_seed_phrase(candidate):
+                    if self._validate_and_filter_seed(candidate):
                         seeds.add(candidate)
+                    
+                    # Try from start if buffer is longer
+                    if len(buffer) > length:
+                        candidate = ' '.join(buffer[:length])
+                        if self._validate_and_filter_seed(candidate):
+                            seeds.add(candidate)
         
-        # Method 3: JSON parsing
+        # Method 4: JSON parsing
         try:
             json_objects = re.findall(r'\{[^}]{20,1000}\}', content)
             for obj_str in json_objects:
                 try:
                     obj = json.loads(obj_str)
-                    for key in ['seed', 'mnemonic', 'phrase', 'words', 'recovery']:
+                    for key in ['seed', 'mnemonic', 'phrase', 'words', 'recovery', 'seedPhrase', 'mnemonicPhrase']:
                         if key in obj:
                             value = obj[key]
                             if isinstance(value, str):
-                                if self.crypto_utils.validate_seed_phrase(value):
-                                    seeds.add(value.lower())
+                                cleaned = value.lower().strip()
+                                if self._validate_and_filter_seed(cleaned):
+                                    seeds.add(cleaned)
                             elif isinstance(value, list):
-                                seed = ' '.join(value).lower()
-                                if self.crypto_utils.validate_seed_phrase(seed):
+                                seed = ' '.join(str(v) for v in value).lower().strip()
+                                if self._validate_and_filter_seed(seed):
                                     seeds.add(seed)
                 except:
                     continue
         except:
             pass
         
-        # Method 4: Wallet file formats
-        # MetaMask style
-        metamask_pattern = r'"mnemonic":\s*"([^"]+)"'
-        matches = re.findall(metamask_pattern, content_lower)
-        for match in matches:
-            if self.crypto_utils.validate_seed_phrase(match):
-                seeds.add(match)
+        # Method 5: Wallet file formats (MetaMask, Trust Wallet, etc.)
+        wallet_patterns = [
+            r'"mnemonic"[\s\:]+["\']([a-z\s]{100,300})["\']',
+            r'"seedPhrase"[\s\:]+["\']([a-z\s]{100,300})["\']',
+            r'backup[\s\:]+["\']([a-z\s]{100,300})["\']',
+        ]
         
-        # Trust Wallet style
-        trust_pattern = r'"words":\s*\[([^\]]+)\]'
-        matches = re.findall(trust_pattern, content_lower)
-        for match in matches:
-            cleaned = re.sub(r'["\',]', ' ', match)
-            cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-            if self.crypto_utils.validate_seed_phrase(cleaned):
-                seeds.add(cleaned)
+        for pattern in wallet_patterns:
+            try:
+                matches = re.findall(pattern, content_lower)
+                for match in matches:
+                    if self._validate_and_filter_seed(match):
+                        seeds.add(match)
+            except:
+                continue
         
-        return list(seeds)
+        return sorted(list(seeds))
+    
+    def _validate_and_filter_seed(self, seed_candidate: str) -> bool:
+        """
+        Smart validation and filtering of seed phrases
+        Removes fake/test/duplicate seeds
+        """
+        if not seed_candidate or len(seed_candidate) < 50:
+            return False
+        
+        # Clean and normalize
+        cleaned = re.sub(r'[^a-z\s]', ' ', seed_candidate.lower())
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        
+        words = cleaned.split()
+        word_count = len(words)
+        
+        # Must be valid length
+        if word_count not in [12, 15, 18, 21, 24]:
+            return False
+        
+        # Check for test/fake patterns
+        fake_patterns = [
+            r'test\s+test',
+            r'example\s+example',
+            r'demo\s+demo',
+            r'sample\s+sample',
+            r'(word\s+){3,}',  # "word word word word..."
+            r'(fake\s+){2,}',
+            r'(invalid\s+){2,}',
+        ]
+        
+        for pattern in fake_patterns:
+            if re.search(pattern, cleaned):
+                return False
+        
+        # Check for repeated words (more than 50%)
+        unique_words = set(words)
+        if len(unique_words) < word_count * 0.5:
+            return False
+        
+        # Must have word variety (not all same word)
+        if len(unique_words) < 3:
+            return False
+        
+        # Validate against BIP39 wordlist
+        if not self.crypto_utils.validate_seed_phrase(cleaned):
+            return False
+        
+        return True
     
     def extract_private_keys(self, content: str) -> List[Dict]:
-        """Extract all private key formats"""
+        """Extract private keys with smart validation"""
         keys = []
+        seen = set()
         
         for key_type, pattern in self.private_key_patterns.items():
             try:
@@ -342,45 +459,108 @@ class UltraAdvancedScanner:
                     if isinstance(match, tuple):
                         match = match[0] if match[0] else match[1]
                     
-                    if match:
-                        # Validate if hex format
-                        if key_type.startswith('RAW_HEX') or key_type == 'ETH_PRIVATE_KEY':
-                            clean_key = match.replace('0x', '').replace('"', '').replace("'", '')
-                            if len(clean_key) == 64 and all(c in '0123456789abcdefABCDEF' for c in clean_key):
-                                keys.append({
-                                    'type': key_type,
-                                    'key': clean_key,
-                                    'format': 'hex'
-                                })
-                        else:
-                            keys.append({
-                                'type': key_type,
-                                'key': match,
-                                'format': key_type.split('_')[0].lower()
-                            })
+                    # Clean the key
+                    key = str(match).strip()
+                    
+                    # Skip if too short or already seen
+                    if len(key) < 50 or key in seen:
+                        continue
+                    
+                    # Validate key format
+                    if not self._is_valid_private_key(key, key_type):
+                        continue
+                    
+                    seen.add(key)
+                    keys.append({
+                        'type': key_type,
+                        'key': key
+                    })
             except:
                 continue
         
         return keys
     
+    def _is_valid_private_key(self, key: str, key_type: str) -> bool:
+        """Validate private key format"""
+        try:
+            if key_type == 'RAW_HEX_64':
+                return len(key) == 64 and all(c in '0123456789abcdefABCDEF' for c in key)
+            elif key_type == 'RAW_HEX_66':
+                return len(key) == 66 and key.startswith('0x')
+            elif key_type in ['WIF_COMPRESSED', 'WIF_UNCOMPRESSED']:
+                return len(key) in [51, 52] and key[0] in ['5', 'K', 'L']
+            else:
+                return len(key) >= 50
+        except:
+            return False
+    
     def extract_credentials(self, content: str) -> List[Dict]:
-        """Extract email:password and username:password"""
+        """Extract email:password and username:password with smart filtering"""
         credentials = []
+        seen = set()
         
         for cred_type, pattern in self.credential_patterns.items():
             try:
                 matches = re.findall(pattern, content, re.IGNORECASE)
                 for match in matches:
                     if len(match) >= 2:
+                        username = match[0].strip()
+                        password = match[1].strip()
+                        
+                        # Skip invalid credentials
+                        if not self._is_valid_credential(username, password):
+                            continue
+                        
+                        # Deduplicate
+                        cred_key = f"{username}:{password}"
+                        if cred_key in seen:
+                            continue
+                        
+                        seen.add(cred_key)
                         credentials.append({
                             'type': cred_type,
-                            'username': match[0],
-                            'password': match[1]
+                            'username': username,
+                            'password': password
                         })
             except:
                 continue
         
         return credentials
+    
+    def _is_valid_credential(self, username: str, password: str) -> bool:
+        """Validate credential is not fake/test data"""
+        if not username or not password:
+            return False
+        
+        # Skip if too short
+        if len(password) < 4 or len(username) < 3:
+            return False
+        
+        # Skip test/fake patterns
+        fake_patterns = [
+            'test', 'example', 'demo', 'sample', 'fake', 'invalid',
+            'user@example.com', 'admin@test.com', 'password123',
+            'testuser', 'demouser', 'fakeuser'
+        ]
+        
+        username_lower = username.lower()
+        password_lower = password.lower()
+        
+        for fake in fake_patterns:
+            if fake in username_lower or fake in password_lower:
+                return False
+        
+        # Email should have valid format if it's email
+        if '@' in username:
+            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', username):
+                return False
+            # Skip common test domains
+            test_domains = ['test.com', 'example.com', 'demo.com', 'fake.com']
+            domain = username.split('@')[1].lower()
+            if domain in test_domains:
+                return False
+        
+        return True
     
     def extract_urls(self, content: str) -> List[str]:
         """Extract all URLs and domains"""
