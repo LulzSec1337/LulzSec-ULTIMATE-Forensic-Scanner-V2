@@ -178,6 +178,8 @@ class UltraAdvancedScanner:
             'sms_apis': [],
             'social_tokens': [],
             'api_keys': [],
+            'mail_access': [],
+            'cookies': [],
         }
         
         try:
@@ -203,6 +205,8 @@ class UltraAdvancedScanner:
             results['sms_apis'] = self.extract_sms_apis(content)
             results['social_tokens'] = self.extract_social_tokens(content)
             results['api_keys'] = self.extract_api_keys(content)
+            results['mail_access'] = self.extract_mail_access(content)
+            results['cookies'] = self.extract_cookies(content)
             
         except Exception as e:
             pass
@@ -229,7 +233,9 @@ class UltraAdvancedScanner:
             'urls': [],
             'sms_apis': [],
             'social_tokens': [],
-            'api_keys': []
+            'api_keys': [],
+            'mail_access': [],
+            'cookies': []
         }
         
         try:
@@ -242,6 +248,8 @@ class UltraAdvancedScanner:
             results['sms_apis'] = self.extract_sms_apis(content)
             results['social_tokens'] = self.extract_social_tokens(content)
             results['api_keys'] = self.extract_api_keys(content)
+            results['mail_access'] = self.extract_mail_access(content)
+            results['cookies'] = self.extract_cookies(content)
             
         except Exception as e:
             print(f"Error scanning content: {e}")
@@ -638,3 +646,121 @@ class UltraAdvancedScanner:
                 continue
         
         return keys
+    
+    def extract_mail_access(self, content: str) -> List[Dict]:
+        """
+        Extract mail access credentials (SMTP, IMAP, POP3)
+        """
+        mail_accounts = []
+        seen = set()
+        
+        # SMTP patterns
+        smtp_pattern = r'(?:smtp|mail)[._-]?(?:server|host)[:\s=]+([^\s;,]+)'
+        smtp_servers = set(re.findall(smtp_pattern, content, re.IGNORECASE))
+        
+        # IMAP patterns
+        imap_pattern = r'imap[._-]?(?:server|host)[:\s=]+([^\s;,]+)'
+        imap_servers = set(re.findall(imap_pattern, content, re.IGNORECASE))
+        
+        # POP3 patterns
+        pop3_pattern = r'pop3?[._-]?(?:server|host)[:\s=]+([^\s;,]+)'
+        pop3_servers = set(re.findall(pop3_pattern, content, re.IGNORECASE))
+        
+        # Extract email credentials
+        email_pattern = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})[:\s]+([^\s]{4,})'
+        matches = re.findall(email_pattern, content, re.IGNORECASE)
+        
+        for email, password in matches:
+            key = f"{email}:{password}"
+            if key in seen:
+                continue
+            seen.add(key)
+            
+            # Determine provider
+            domain = email.split('@')[1].lower() if '@' in email else ''
+            provider = 'Unknown'
+            
+            provider_map = {
+                'gmail.com': 'Gmail',
+                'outlook.com': 'Outlook',
+                'hotmail.com': 'Hotmail',
+                'yahoo.com': 'Yahoo',
+                'icloud.com': 'iCloud',
+                'protonmail.com': 'ProtonMail',
+            }
+            
+            provider = provider_map.get(domain, domain.split('.')[0].title() if domain else 'Unknown')
+            
+            # Try to match with servers
+            smtp = None
+            imap = None
+            pop3 = None
+            
+            for server in smtp_servers:
+                if domain in server.lower():
+                    smtp = server
+                    break
+            
+            for server in imap_servers:
+                if domain in server.lower():
+                    imap = server
+                    break
+            
+            for server in pop3_servers:
+                if domain in server.lower():
+                    pop3 = server
+                    break
+            
+            # Default servers if not found
+            if not smtp and 'gmail' in domain:
+                smtp = 'smtp.gmail.com:587'
+                imap = 'imap.gmail.com:993'
+            elif not smtp and 'outlook' in domain or 'hotmail' in domain:
+                smtp = 'smtp-mail.outlook.com:587'
+                imap = 'outlook.office365.com:993'
+            elif not smtp and 'yahoo' in domain:
+                smtp = 'smtp.mail.yahoo.com:587'
+                imap = 'imap.mail.yahoo.com:993'
+            
+            mail_accounts.append({
+                'email': email,
+                'password': password,
+                'provider': provider,
+                'smtp': smtp,
+                'imap': imap,
+                'pop3': pop3
+            })
+        
+        return mail_accounts
+    
+    def extract_cookies(self, content: str) -> List[Dict]:
+        """Extract browser cookies"""
+        cookies = []
+        
+        # Cookie patterns
+        cookie_patterns = [
+            r'Set-Cookie:\s*([^=]+)=([^;]+)',
+            r'Cookie:\s*([^=]+)=([^;]+)',
+            r'"cookie":\s*"([^"]+)"',
+            r'document\.cookie\s*=\s*["\']([^"\']+)["\']',
+        ]
+        
+        for pattern in cookie_patterns:
+            try:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        if len(match) >= 2:
+                            cookies.append({
+                                'name': match[0].strip(),
+                                'value': match[1].strip()
+                            })
+                    else:
+                        cookies.append({
+                            'raw': match.strip()
+                        })
+            except:
+                continue
+        
+        return cookies[:100]  # Limit to 100 cookies
+

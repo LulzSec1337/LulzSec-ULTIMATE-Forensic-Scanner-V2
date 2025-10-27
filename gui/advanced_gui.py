@@ -602,16 +602,40 @@ class LulzSecAdvancedGUI:
         return left
     
     def setup_center_panel(self, parent):
-        """Setup center results panel"""
+        """Setup center results panel with comprehensive tabs"""
         center = tk.Frame(parent, bg=self.theme.colors['bg'])
         
         # Tabbed interface for results
         notebook = ttk.Notebook(center)
         notebook.pack(fill=tk.BOTH, expand=True)
         
-        # Tab 1: Wallets
+        # Tab 1: Seed Phrases (ONLY seeds, 12/24 words)
+        seeds_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
+        notebook.add(seeds_tab, text="🌱 Seed Phrases")
+        
+        self.seeds_text = scrolledtext.ScrolledText(seeds_tab,
+                                                     bg=self.theme.colors['bg_tertiary'],
+                                                     fg=self.theme.colors['fg'],
+                                                     font=self.theme.fonts['mono_small'],
+                                                     insertbackground=self.theme.colors['accent'],
+                                                     wrap=tk.NONE)
+        self.seeds_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tab 2: Private Keys (ONLY keys)
+        keys_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
+        notebook.add(keys_tab, text="🔑 Private Keys")
+        
+        self.keys_text = scrolledtext.ScrolledText(keys_tab,
+                                                    bg=self.theme.colors['bg_tertiary'],
+                                                    fg=self.theme.colors['fg'],
+                                                    font=self.theme.fonts['mono_small'],
+                                                    insertbackground=self.theme.colors['accent'],
+                                                    wrap=tk.NONE)
+        self.keys_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tab 3: Wallets
         wallets_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
-        notebook.add(wallets_tab, text="💰 Wallets")
+        notebook.add(wallets_tab, text="💰 Wallet Addresses")
         
         self.wallets_text = scrolledtext.ScrolledText(wallets_tab,
                                                        bg=self.theme.colors['bg_tertiary'],
@@ -621,21 +645,21 @@ class LulzSecAdvancedGUI:
                                                        wrap=tk.WORD)
         self.wallets_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Tab 2: Seeds
-        seeds_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
-        notebook.add(seeds_tab, text="🌱 Seeds")
+        # Tab 4: Mail Access (NEW - SMTP/IMAP/POP3)
+        mail_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
+        notebook.add(mail_tab, text="📧 Mail Access")
         
-        self.seeds_text = scrolledtext.ScrolledText(seeds_tab,
-                                                     bg=self.theme.colors['bg_tertiary'],
-                                                     fg=self.theme.colors['fg'],
-                                                     font=self.theme.fonts['mono_small'],
-                                                     insertbackground=self.theme.colors['accent'],
-                                                     wrap=tk.WORD)
-        self.seeds_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.mail_text = scrolledtext.ScrolledText(mail_tab,
+                                                    bg=self.theme.colors['bg_tertiary'],
+                                                    fg=self.theme.colors['fg'],
+                                                    font=self.theme.fonts['mono_small'],
+                                                    insertbackground=self.theme.colors['accent'],
+                                                    wrap=tk.WORD)
+        self.mail_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Tab 3: Credentials
+        # Tab 5: Credentials
         creds_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
-        notebook.add(creds_tab, text="🔑 Credentials")
+        notebook.add(creds_tab, text="� Credentials")
         
         self.creds_text = scrolledtext.ScrolledText(creds_tab,
                                                      bg=self.theme.colors['bg_tertiary'],
@@ -645,7 +669,19 @@ class LulzSecAdvancedGUI:
                                                      wrap=tk.WORD)
         self.creds_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Tab 4: SMS APIs
+        # Tab 6: Cookies
+        cookies_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
+        notebook.add(cookies_tab, text="🍪 Cookies")
+        
+        self.cookies_text = scrolledtext.ScrolledText(cookies_tab,
+                                                       bg=self.theme.colors['bg_tertiary'],
+                                                       fg=self.theme.colors['fg'],
+                                                       font=self.theme.fonts['mono_small'],
+                                                       insertbackground=self.theme.colors['accent'],
+                                                       wrap=tk.WORD)
+        self.cookies_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tab 7: SMS APIs
         sms_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
         notebook.add(sms_tab, text="📱 SMS APIs")
         
@@ -657,7 +693,19 @@ class LulzSecAdvancedGUI:
                                                    wrap=tk.WORD)
         self.sms_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Tab 5: Logs
+        # Tab 8: API Keys
+        apikeys_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
+        notebook.add(apikeys_tab, text="🔑 API Keys")
+        
+        self.apikeys_text = scrolledtext.ScrolledText(apikeys_tab,
+                                                       bg=self.theme.colors['bg_tertiary'],
+                                                       fg=self.theme.colors['fg'],
+                                                       font=self.theme.fonts['mono_small'],
+                                                       insertbackground=self.theme.colors['accent'],
+                                                       wrap=tk.WORD)
+        self.apikeys_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tab 9: Logs
         logs_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
         notebook.add(logs_tab, text="📋 Logs")
         
@@ -944,26 +992,46 @@ class LulzSecAdvancedGUI:
             # Clear previous results
             self.wallets_text.delete(1.0, tk.END)
             self.seeds_text.delete(1.0, tk.END)
+            self.keys_text.delete(1.0, tk.END)
             self.creds_text.delete(1.0, tk.END)
+            self.mail_text.delete(1.0, tk.END)
+            self.cookies_text.delete(1.0, tk.END)
             self.sms_text.delete(1.0, tk.END)
+            self.apikeys_text.delete(1.0, tk.END)
             
             # Add headers to tabs
             self.wallets_text.insert(tk.END, "💰 WALLET ADDRESSES\n")
             self.wallets_text.insert(tk.END, "=" * 80 + "\n")
             self.wallets_text.insert(tk.END, "Extracting wallet addresses from all supported networks...\n\n")
             
-            self.seeds_text.insert(tk.END, "🌱 SEED PHRASES & PRIVATE KEYS\n")
+            self.seeds_text.insert(tk.END, "🌱 SEED PHRASES (12/15/18/21/24 WORDS)\n")
             self.seeds_text.insert(tk.END, "=" * 80 + "\n")
             self.seeds_text.insert(tk.END, "Extracting and validating BIP39 seed phrases...\n")
             self.seeds_text.insert(tk.END, "All seeds will be validated and tested against BIP39 wordlist\n\n")
+            
+            self.keys_text.insert(tk.END, "🔑 PRIVATE KEYS (ALL FORMATS)\n")
+            self.keys_text.insert(tk.END, "=" * 80 + "\n")
+            self.keys_text.insert(tk.END, "Extracting private keys in all formats (HEX, WIF, etc.)...\n\n")
             
             self.creds_text.insert(tk.END, "🔐 CREDENTIALS\n")
             self.creds_text.insert(tk.END, "=" * 80 + "\n")
             self.creds_text.insert(tk.END, "Extracting email:password and username:password combinations...\n\n")
             
+            self.mail_text.insert(tk.END, "📧 MAIL ACCESS (SMTP/IMAP/POP3)\n")
+            self.mail_text.insert(tk.END, "=" * 80 + "\n")
+            self.mail_text.insert(tk.END, "Extracting mail server credentials and configurations...\n\n")
+            
+            self.cookies_text.insert(tk.END, "🍪 BROWSER COOKIES\n")
+            self.cookies_text.insert(tk.END, "=" * 80 + "\n")
+            self.cookies_text.insert(tk.END, "Extracting browser cookies and session data...\n\n")
+            
             self.sms_text.insert(tk.END, "📱 SMS API CREDENTIALS\n")
             self.sms_text.insert(tk.END, "=" * 80 + "\n")
             self.sms_text.insert(tk.END, "Detecting SMS API credentials (Twilio, Nexmo, Plivo, etc.)...\n\n")
+            
+            self.apikeys_text.insert(tk.END, "🔑 API KEYS (100+ SERVICES)\n")
+            self.apikeys_text.insert(tk.END, "=" * 80 + "\n")
+            self.apikeys_text.insert(tk.END, "Extracting API keys from AWS, Stripe, GitHub, OpenAI, etc...\n\n")
             
             # Count files first
             total_files = 0
@@ -998,6 +1066,8 @@ class LulzSecAdvancedGUI:
             total_sms = 0
             total_tokens = 0
             total_apis = 0
+            total_mail = 0
+            total_cookies = 0
             
             # Scan each file with ULTRA scanner
             for file_path in file_list:
@@ -1069,7 +1139,7 @@ class LulzSecAdvancedGUI:
                             self.wallets_text.insert(tk.END, "\n")
                             self.wallets_text.see(tk.END)
                     
-                    # Process seed phrases
+                    # Process seed phrases (ONLY seeds in Seeds tab)
                     if results['seeds']:
                         count = len(results['seeds'])
                         total_seeds += count
@@ -1078,14 +1148,19 @@ class LulzSecAdvancedGUI:
                         for seed in results['seeds']:
                             word_count = len(seed.split())
                             
-                            # Display in seeds tab with better formatting
-                            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
-                            self.seeds_text.insert(tk.END, f"🌱 SEED PHRASE ({word_count} words) - VALID ✅\n")
-                            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
-                            self.seeds_text.insert(tk.END, f"{seed}\n")
-                            self.seeds_text.insert(tk.END, f"Source: {file_name}\n")
-                            self.seeds_text.insert(tk.END, "=" * 80 + "\n\n")
-                            self.seeds_text.see(tk.END)
+                            # CRUD-style table display
+                            self.seeds_text.insert(tk.END, "┌" + "─" * 78 + "┐\n")
+                            self.seeds_text.insert(tk.END, f"│ 🌱 SEED PHRASE ({word_count} WORDS) - VALID ✅{' ' * (78-len(f' SEED PHRASE ({word_count} WORDS) - VALID ✅')-4)}│\n")
+                            self.seeds_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                            
+                            # Split seed into lines for better readability
+                            words = seed.split()
+                            for i in range(0, len(words), 6):
+                                line_words = ' '.join(words[i:i+6])
+                                self.seeds_text.insert(tk.END, f"│ {line_words:<76} │\n")
+                            
+                            self.seeds_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                            self.seeds_text.insert(tk.END, f"│ 📁 Source: {file_name:<64} │\n")
                             
                             # Save to database
                             self.db.add_seed_phrase({
@@ -1098,56 +1173,59 @@ class LulzSecAdvancedGUI:
                             # Derive addresses if enabled
                             if self.opt_vars.get('derive_networks', tk.BooleanVar(value=True)).get():
                                 try:
-                                    self.seeds_text.insert(tk.END, "📊 Derived Addresses:\n")
-                                    self.seeds_text.insert(tk.END, "-" * 80 + "\n")
+                                    self.seeds_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                                    self.seeds_text.insert(tk.END, f"│ 📊 DERIVED ADDRESSES:{' ' * 56} │\n")
+                                    self.seeds_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
                                     
                                     all_addresses = self.crypto_utils.derive_all_addresses_from_seed(seed)
                                     for network, addr_info in all_addresses.items():
                                         if 'address' in addr_info:
                                             address = addr_info['address']
-                                            self.seeds_text.insert(tk.END, f"  {network:8s}: {address}\n")
+                                            self.seeds_text.insert(tk.END, f"│ {network:8s}: {address:<66} │\n")
                                             self.db.add_derived_address({
                                                 'seed_phrase': seed,
                                                 'network': network,
                                                 'address': address
                                             })
-                                    
-                                    self.seeds_text.insert(tk.END, "-" * 80 + "\n\n")
-                                    self.seeds_text.see(tk.END)
                                 except Exception as e:
-                                    self.seeds_text.insert(tk.END, f"  ⚠️ Derivation error: {str(e)[:50]}\n\n")
+                                    self.seeds_text.insert(tk.END, f"│ ⚠️ Derivation error: {str(e)[:60]:<59} │\n")
+                            
+                            self.seeds_text.insert(tk.END, "└" + "─" * 78 + "┘\n\n")
+                            self.seeds_text.see(tk.END)
                         
                         # Force update to show seeds immediately
                         self.root.update_idletasks()
                     
-                    # Process private keys
+                    # Process private keys (ONLY keys in Keys tab)
                     if results['private_keys']:
                         count = len(results['private_keys'])
                         total_keys += count
                         self.add_log(f"🔑 {file_name}: Found {count} private key(s)", "success")
                         
-                        for key_data in results['private_keys'][:10]:
+                        for key_data in results['private_keys'][:20]:
                             key_type = key_data['type']
                             key = key_data['key']
                             
-                            # Display in seeds tab with clear formatting
-                            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
-                            self.seeds_text.insert(tk.END, f"🔑 PRIVATE KEY - {key_type}\n")
-                            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
-                            self.seeds_text.insert(tk.END, f"{key}\n")
-                            self.seeds_text.insert(tk.END, f"Source: {file_name}\n")
+                            # CRUD-style table display in KEYS tab
+                            self.keys_text.insert(tk.END, "┌" + "─" * 78 + "┐\n")
+                            self.keys_text.insert(tk.END, f"│ 🔑 PRIVATE KEY - {key_type}{' ' * (78-len(f' PRIVATE KEY - {key_type}')-4)}│\n")
+                            self.keys_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                            self.keys_text.insert(tk.END, f"│ {key:<76} │\n")
+                            self.keys_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                            self.keys_text.insert(tk.END, f"│ 📁 Source: {file_name:<64} │\n")
                             
                             # Try to derive address
                             try:
                                 if key_type in ['RAW_HEX_64', 'RAW_HEX_66', 'ETH_PRIVATE_KEY']:
-                                    self.seeds_text.insert(tk.END, "📊 Derived Addresses:\n")
-                                    self.seeds_text.insert(tk.END, "-" * 80 + "\n")
+                                    self.keys_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                                    self.keys_text.insert(tk.END, f"│ 📊 DERIVED ADDRESSES:{' ' * 56} │\n")
+                                    self.keys_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
                                     
                                     for network in ['ETH', 'BTC', 'TRX']:
                                         try:
                                             addr = self.crypto_utils.private_key_to_address(key, network)
                                             if addr:
-                                                self.seeds_text.insert(tk.END, f"  {network:8s}: {addr}\n")
+                                                self.keys_text.insert(tk.END, f"│ {network:8s}: {addr:<66} │\n")
                                                 self.db.add_wallet({
                                                     'address': addr,
                                                     'network': network,
@@ -1156,13 +1234,11 @@ class LulzSecAdvancedGUI:
                                                 })
                                         except:
                                             pass
-                                    
-                                    self.seeds_text.insert(tk.END, "-" * 80 + "\n")
                             except:
                                 pass
                             
-                            self.seeds_text.insert(tk.END, "=" * 80 + "\n\n")
-                            self.seeds_text.see(tk.END)
+                            self.keys_text.insert(tk.END, "└" + "─" * 78 + "┘\n\n")
+                            self.keys_text.see(tk.END)
                     
                     # Process credentials
                     if results['credentials']:
@@ -1255,7 +1331,93 @@ class LulzSecAdvancedGUI:
                         for api_data in results['api_keys']:
                             service = api_data['service']
                             api_key = api_data['api_key']
-                            self.details_text.insert(tk.END, f"🔑 {service}: {api_key}\n")
+                            # Display in API Keys tab with CRUD-style formatting
+                            self.apikeys_text.insert(tk.END, "┌" + "─" * 78 + "┐\n")
+                            self.apikeys_text.insert(tk.END, f"│ 🔑 {service.upper()}{' ' * (78-len(f' {service.upper()}')-4)}│\n")
+                            self.apikeys_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                            self.apikeys_text.insert(tk.END, f"│ {api_key:<76} │\n")
+                            self.apikeys_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                            self.apikeys_text.insert(tk.END, f"│ 📁 Source: {file_name:<64} │\n")
+                            self.apikeys_text.insert(tk.END, "└" + "─" * 78 + "┘\n\n")
+                            self.apikeys_text.see(tk.END)
+                    
+                    # Process Mail Access (NEW)
+                    if results.get('mail_access'):
+                        mail_accounts = results['mail_access']
+                        count = len(mail_accounts)
+                        total_mail += count
+                        if count > 0:
+                            self.add_log(f"📧 {file_name}: Found {count} mail access account(s)", "success")
+                            
+                            for mail_data in mail_accounts:
+                                # CRUD-style table display in Mail Access tab
+                                provider = mail_data.get('provider', 'UNKNOWN').upper()
+                                header_text = f" MAIL ACCESS - {provider}"
+                                padding = 78 - len(header_text) - 4
+                                
+                                self.mail_text.insert(tk.END, "┌" + "─" * 78 + "┐\n")
+                                self.mail_text.insert(tk.END, f"│ 📧{header_text}{' ' * padding}│\n")
+                                self.mail_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                                
+                                # Email
+                                if 'email' in mail_data:
+                                    self.mail_text.insert(tk.END, f"│ 📬 Email      : {mail_data['email']:<61} │\n")
+                                
+                                # Password
+                                if 'password' in mail_data:
+                                    self.mail_text.insert(tk.END, f"│ 🔐 Password   : {mail_data['password']:<61} │\n")
+                                
+                                # SMTP Server
+                                if 'smtp_server' in mail_data:
+                                    self.mail_text.insert(tk.END, f"│ 📤 SMTP Server: {mail_data['smtp_server']:<61} │\n")
+                                
+                                # SMTP Port
+                                if 'smtp_port' in mail_data:
+                                    self.mail_text.insert(tk.END, f"│ 🔌 SMTP Port  : {str(mail_data['smtp_port']):<61} │\n")
+                                
+                                # IMAP Server
+                                if 'imap_server' in mail_data:
+                                    self.mail_text.insert(tk.END, f"│ 📥 IMAP Server: {mail_data['imap_server']:<61} │\n")
+                                
+                                # IMAP Port
+                                if 'imap_port' in mail_data:
+                                    self.mail_text.insert(tk.END, f"│ 🔌 IMAP Port  : {str(mail_data['imap_port']):<61} │\n")
+                                
+                                # POP3 Server
+                                if 'pop3_server' in mail_data:
+                                    self.mail_text.insert(tk.END, f"│ 📥 POP3 Server: {mail_data['pop3_server']:<61} │\n")
+                                
+                                # POP3 Port
+                                if 'pop3_port' in mail_data:
+                                    self.mail_text.insert(tk.END, f"│ 🔌 POP3 Port  : {str(mail_data['pop3_port']):<61} │\n")
+                                
+                                self.mail_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                                self.mail_text.insert(tk.END, f"│ 📁 Source: {file_name:<64} │\n")
+                                self.mail_text.insert(tk.END, "└" + "─" * 78 + "┘\n\n")
+                                self.mail_text.see(tk.END)
+                                
+                                # Save to database
+                                self.db.add_smtp_credential({
+                                    'email': mail_data.get('email', ''),
+                                    'password': mail_data.get('password', ''),
+                                    'smtp_server': mail_data.get('smtp_server', ''),
+                                    'smtp_port': mail_data.get('smtp_port', 0),
+                                    'source_file': file_path
+                                })
+                    
+                    # Process Cookies
+                    if results.get('cookies'):
+                        count = len(results['cookies'])
+                        total_cookies += count
+                        if count > 0:
+                            self.cookies_text.insert(tk.END, f"\n📄 From: {file_name} ({count} cookies)\n")
+                            self.cookies_text.insert(tk.END, "-" * 80 + "\n")
+                            for cookie in results['cookies'][:50]:
+                                self.cookies_text.insert(tk.END, f"{cookie}\n")
+                            if count > 50:
+                                self.cookies_text.insert(tk.END, f"... and {count - 50} more cookies\n")
+                            self.cookies_text.insert(tk.END, "\n")
+                            self.cookies_text.see(tk.END)
                 
                 except Exception as e:
                     if files_scanned % 100 == 0:
@@ -1286,7 +1448,9 @@ class LulzSecAdvancedGUI:
 🌱 Seed Phrases (VALID):  {total_seeds:,}
 🔑 Private Keys:          {total_keys:,}
 🔐 Credentials:           {total_creds:,}
-🔗 URLs Extracted:        {total_urls:,}
+� Mail Access:           {total_mail:,}
+🍪 Cookies:               {total_cookies:,}
+�🔗 URLs Extracted:        {total_urls:,}
 📱 SMS APIs:              {total_sms:,}
 💬 Social Tokens:         {total_tokens:,}
 🔑 API Keys:              {total_apis:,}
@@ -1303,12 +1467,14 @@ class LulzSecAdvancedGUI:
    • Address derivation from seeds
    • Private key validation
    • Credential format validation
+   • Mail server configuration extraction
+   • Cookie and session data extraction
 
 💾 DATABASE: All findings saved to lulzsec_wallets_ultimate_v9.db
-📊 TABS: Check all tabs (Wallets, Seeds, Credentials, SMS APIs, Logs)
-� EXPORT: Use Export menu to save results in various formats
+📊 TABS: Check all 9 tabs for complete results
+📤 EXPORT: Use Export menu to save results in various formats
 
-{"🎉 HIGH VALUE SCAN!" if total_seeds > 0 or total_keys > 0 else ""}
+{"🎉 HIGH VALUE SCAN! Seeds/Keys/Mail Found!" if total_seeds > 0 or total_keys > 0 or total_mail > 0 else ""}
             """
             self.add_log(summary, "success")
             
