@@ -461,10 +461,10 @@ class UltraAdvancedScanner:
     
     def _validate_and_filter_seed(self, seed_candidate: str) -> bool:
         """
-        Smart validation and filtering of seed phrases
-        Removes fake/test/duplicate seeds but less strict for real data
+        STRICT validation and filtering of seed phrases
+        Only accepts real BIP39 seed phrases
         """
-        if not seed_candidate or len(seed_candidate) < 40:  # Reduced from 50
+        if not seed_candidate or len(seed_candidate) < 50:
             return False
         
         # Clean and normalize
@@ -478,46 +478,64 @@ class UltraAdvancedScanner:
         if word_count not in [12, 15, 18, 21, 24]:
             return False
         
+        # Reject if contains obvious non-seed words
+        non_seed_words = [
+            'password', 'username', 'email', 'login', 'account', 'name', 'value',
+            'pid', 'exe', 'com', 'net', 'org', 'http', 'www', 'file', 'folder',
+            'program', 'windows', 'system', 'user', 'computer', 'browser', 'chrome',
+            'firefox', 'edge', 'textbox', 'card', 'graphics', 'nvidia', 'domain',
+            'product', 'version', 'install', 'software', 'process', 'service',
+            'sister', 'brother', 'sis', 'bro', 'avg', 'runassvc', 'blizzeq',
+            'kream', 'raheem', 'gmail', 'nje', 'lil', 'afwserv', 'avgsvc',
+            'geforce', 'rtx', 'bit', 'battle'
+        ]
+        
+        # Check if any non-seed words present
+        for word in words:
+            if word in non_seed_words:
+                return False
+        
         # Check for obvious test/fake patterns
         fake_patterns = [
-            r'test\s+test\s+test',  # Made more specific
-            r'example\s+example\s+example',
-            r'demo\s+demo\s+demo',
-            r'(word\s+){5,}',  # Must be 5+ repetitions
-            r'(fake\s+){3,}',
-            r'(invalid\s+){3,}',
-            r'(sample\s+){3,}',
+            r'test\s+test',
+            r'example\s+example',
+            r'demo\s+demo',
+            r'(word\s+){3,}',
+            r'(fake\s+){2,}',
+            r'(invalid\s+){2,}',
+            r'(sample\s+){2,}',
         ]
         
         for pattern in fake_patterns:
             if re.search(pattern, cleaned):
                 return False
         
-        # Check for repeated words (more lenient - allow up to 60%)
+        # Check for repeated words
+        # BIP39 test seeds like "abandon abandon..." have low uniqueness
+        # But garbage from logs usually has medium uniqueness
+        # So we check: if uniqueness is VERY low but BIP39 valid = OK
+        # If uniqueness is low and has non-seed words = FAIL
         unique_words = set(words)
-        if len(unique_words) < word_count * 0.4:  # Reduced from 0.5
-            return False
+        uniqueness_ratio = len(unique_words) / word_count
         
-        # Must have word variety (at least 3 unique words)
-        if len(unique_words) < 3:
-            return False
+        # If uniqueness is below 20%, must pass strict BIP39 validation later
+        # If uniqueness is 20-40%, still check for non-seed words above
+        # This allows "abandon abandon..." but blocks most garbage
         
         # Check word lengths (BIP39 words are 3-8 letters)
         for word in words:
             if len(word) < 3 or len(word) > 8:
                 return False
+            if not word.isalpha():  # Must be only letters
+                return False
         
-        # Optional: Try BIP39 validation but don't fail if it doesn't work
+        # STRICT: Must pass BIP39 validation
         try:
             if not self.crypto_utils.validate_seed_phrase(cleaned):
-                # If BIP39 validation fails, check if most words look valid
-                # Count words that look like they could be BIP39 words
-                valid_looking = sum(1 for w in words if 3 <= len(w) <= 8 and w.isalpha())
-                if valid_looking < word_count * 0.8:  # At least 80% look valid
-                    return False
+                return False
         except:
-            # If validation throws error, allow it if words look reasonable
-            pass
+            # If validation fails, reject it
+            return False
         
         return True
     
