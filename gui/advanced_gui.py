@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import json
+import re
 import sqlite3
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, Menu, simpledialog
@@ -921,16 +922,192 @@ class LulzSecAdvancedGUI:
     def _run_crypto_scan(self, target_dir):
         """Run cryptocurrency scan"""
         try:
-            # Scan for wallets and seeds
-            self.add_log("💰 Scanning for wallet addresses...", "info")
+            # Update phase
+            self.metrics['scan_phase'] = 'Initializing...'
             
-            # TODO: Implement actual scanning logic here
-            # For now, this is a placeholder
+            # Count files first
+            total_files = 0
+            for root, dirs, files in os.walk(target_dir):
+                total_files += len(files)
             
-            self.add_log("✅ Cryptocurrency scan complete!", "success")
+            if total_files == 0:
+                self.add_log("⚠️ No files found in directory", "warning")
+                return
+            
+            self.add_log(f"📊 Found {total_files} files to scan", "info")
+            
+            # Scan files
+            files_scanned = 0
+            start_time = time.time()
+            
+            for root, dirs, files in os.walk(target_dir):
+                if not self.is_scanning:
+                    self.add_log("⏹️ Scan stopped by user", "warning")
+                    break
+                
+                for file in files:
+                    if not self.is_scanning:
+                        break
+                    
+                    file_path = os.path.join(root, file)
+                    files_scanned += 1
+                    
+                    # Update metrics
+                    self.metrics['files_scanned'] = files_scanned
+                    self.metrics['scan_phase'] = f'Scanning... {files_scanned}/{total_files}'
+                    
+                    # Calculate progress
+                    progress = (files_scanned / total_files) * 100
+                    self.progress_var.set(progress)
+                    self.progress_percent_var.set(f"{progress:.1f}%")
+                    
+                    # Calculate speed
+                    elapsed = time.time() - start_time
+                    if elapsed > 0:
+                        speed = files_scanned / elapsed
+                        self.metrics['files_per_second'] = speed
+                        
+                        # Estimate remaining time
+                        remaining_files = total_files - files_scanned
+                        if speed > 0:
+                            remaining_time = remaining_files / speed
+                            self.metrics['estimated_time_remaining'] = remaining_time
+                    
+                    try:
+                        # Read file content
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read(1024 * 1024)  # Read max 1MB
+                        
+                        # Extract wallet addresses using regex patterns
+                        wallet_patterns = {
+                            'ETH': r'0x[a-fA-F0-9]{40}',
+                            'BTC': r'\b(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}\b',
+                            'TRX': r'T[A-Za-z1-9]{33}',
+                            'SOL': r'[1-9A-HJ-NP-Za-km-z]{32,44}',
+                            'LTC': r'[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}',
+                            'DOGE': r'D{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}'
+                        }
+                        
+                        addresses_found = []
+                        for network, pattern in wallet_patterns.items():
+                            matches = re.findall(pattern, content)
+                            for match in matches[:10]:  # Limit per network
+                                addresses_found.append({'network': network, 'address': match})
+                        
+                        if addresses_found:
+                            self.add_log(f"💰 Found {len(addresses_found)} address(es) in {file}", "success")
+                            for addr in addresses_found[:5]:  # Limit display
+                                network = addr.get('network', 'UNKNOWN')
+                                address = addr.get('address', '')
+                                self.wallets_text.insert(tk.END, f"{network}: {address}\n")
+                                
+                                # Save to database
+                                self.db.add_wallet({
+                                    'address': address,
+                                    'network': network,
+                                    'source_file': file_path
+                                })
+                        
+                        # Extract seed phrases
+                        seeds = self.crypto_utils.extract_seed_phrases_from_text(content)
+                        if seeds:
+                            self.add_log(f"🌱 Found {len(seeds)} seed phrase(s) in {file}", "success")
+                            for seed in seeds:
+                                # Validate seed
+                                is_valid = self.crypto_utils.validate_seed_phrase(seed)
+                                status = "✅ VALID" if is_valid else "❌ INVALID"
+                                
+                                self.seeds_text.insert(tk.END, f"{status}: {seed[:50]}...\n")
+                                
+                                # Save to database
+                                self.db.add_seed_phrase({
+                                    'seed_phrase': seed,
+                                    'word_count': len(seed.split()),
+                                    'is_valid': is_valid,
+                                    'source_file': file_path
+                                })
+                                
+                                # If valid and option enabled, derive addresses
+                                if is_valid and self.opt_vars.get('derive_networks', tk.BooleanVar(value=True)).get():
+                                    private_keys = self.crypto_utils.extract_private_keys_from_text(seed)
+                                    if private_keys:
+                                        pk = private_keys[0]
+                                        for network in ['ETH', 'BTC', 'TRX', 'SOL']:
+                                            try:
+                                                addr = self.crypto_utils.private_key_to_address(pk, network)
+                                                if addr:
+                                                    self.db.add_derived_address({
+                                                        'seed_phrase': seed,
+                                                        'network': network,
+                                                        'address': addr
+                                                    })
+                                            except:
+                                                pass
+                        
+                        # Extract credentials if enabled
+                        if self.opt_vars.get('extract_creds', tk.BooleanVar(value=True)).get():
+                            # Simple email:password pattern
+                            cred_pattern = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}):([^\s]+)'
+                            matches = re.findall(cred_pattern, content)
+                            
+                            if matches:
+                                self.add_log(f"🔑 Found {len(matches)} credential(s) in {file}", "success")
+                                for email, password in matches[:10]:  # Limit
+                                    self.creds_text.insert(tk.END, f"{email}:{password}\n")
+                                    
+                                    self.db.add_credential({
+                                        'email': email,
+                                        'password': password,
+                                        'source_file': file_path
+                                    })
+                        
+                        # Detect SMS APIs if enabled
+                        if self.opt_vars.get('detect_sms', tk.BooleanVar(value=True)).get():
+                            sms_apis = self.sms_detector.scan_text_for_apis(content)
+                            if sms_apis:
+                                self.add_log(f"📱 Found {len(sms_apis)} SMS API credential(s) in {file}", "success")
+                                for api in sms_apis:
+                                    provider = api.get('provider', 'Unknown')
+                                    creds = api.get('credentials', {})
+                                    self.sms_text.insert(tk.END, f"{provider}: {creds}\n")
+                                    
+                                    self.db.add_sms_api({
+                                        'provider': provider,
+                                        'api_key': str(creds),
+                                        'source_file': file_path
+                                    })
+                    
+                    except Exception as e:
+                        if files_scanned % 100 == 0:  # Only log every 100 files
+                            self.add_log(f"⚠️ Error scanning {file}: {str(e)[:50]}", "warning")
+            
+            # Final update
+            self.progress_var.set(100)
+            self.progress_percent_var.set("100%")
+            self.add_log(f"✅ Cryptocurrency scan complete! Scanned {files_scanned} files", "success")
+            
+            # Update final statistics
+            self.update_metrics_from_db()
+            
+            # Show summary
+            stats = self.db.get_statistics()
+            summary = f"""
+📊 SCAN SUMMARY:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📁 Files Scanned: {files_scanned}
+💰 Wallets Found: {stats.get('wallets', 0)}
+🌱 Seeds Found: {stats.get('seeds', 0)}
+✅ Valid Seeds: {stats.get('valid_seeds', 0)}
+🔑 Credentials: {stats.get('credentials', 0)}
+📱 SMS APIs: {stats.get('sms_apis', 0)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            """
+            self.add_log(summary, "success")
             
         except Exception as e:
             self.add_log(f"❌ Scan error: {e}", "error")
+            import traceback
+            self.add_log(traceback.format_exc(), "error")
         finally:
             self.is_scanning = False
             self.metrics['scan_phase'] = 'Idle'
@@ -968,16 +1145,16 @@ class LulzSecAdvancedGUI:
     def _run_full_scan(self, target_dir):
         """Run full forensic scan"""
         try:
-            # Comprehensive scan
-            self.add_log("📊 Starting comprehensive extraction...", "info")
+            # Full scan includes everything from crypto scan plus more
+            self.add_log("📊 Starting comprehensive forensic extraction...", "info")
             
-            # TODO: Implement actual scanning logic here
-            # For now, this is a placeholder
-            
-            self.add_log("✅ Full scan complete!", "success")
+            # Run the crypto scan logic (same as crypto scan)
+            self._run_crypto_scan(target_dir)
             
         except Exception as e:
             self.add_log(f"❌ Scan error: {e}", "error")
+            import traceback
+            self.add_log(traceback.format_exc(), "error")
         finally:
             self.is_scanning = False
             self.metrics['scan_phase'] = 'Idle'
