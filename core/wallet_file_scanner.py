@@ -99,12 +99,19 @@ class WalletFileScanner:
             'lock',        # LevelDB
             'keystore',
             'seed.txt',
+            'seeds.txt',
             'keys.txt',
             'private.txt',
-            'mnemonic.txt',
+            'mnemonic.txt',     # Common seed phrase file
+            'mnemonic',         # No extension version
             'recovery.txt',
+            'recovery',
             'backup.txt',
+            'backup',
             'addresses.txt',
+            'phrase.txt',       # Recovery phrase
+            'wallet.json',
+            'account.json',
         }
         
     def normalize_path(self, path: str) -> str:
@@ -145,7 +152,7 @@ class WalletFileScanner:
     def extract_from_json(self, file_path: str) -> Dict[str, List]:
         """
         Extract wallet data from JSON files
-        Handles Metamask vaults, keystores, wallet exports
+        Handles Metamask vaults, keystores, wallet exports, browser extensions
         """
         results = {
             'seeds': [],
@@ -170,13 +177,28 @@ class WalletFileScanner:
                             'full_length': len(vault_data)
                         })
                 
-                # Look for mnemonic/seed
-                for key in ['mnemonic', 'seed', 'seedPhrase', 'seed_phrase']:
+                # Look for mnemonic/seed - AGGRESSIVE SEARCH
+                seed_keys = [
+                    'mnemonic', 'seed', 'seedPhrase', 'seed_phrase', 'seedphrase',
+                    'recoveryPhrase', 'recovery_phrase', 'phrase', 'words',
+                    'backupPhrase', 'backup_phrase', 'secret', 'secretPhrase',
+                    'wallet_seed', 'walletSeed', 'mnemonicPhrase', 'mnemonic_phrase'
+                ]
+                
+                for key in seed_keys:
                     if key in data and data[key]:
-                        results['seeds'].append(str(data[key]))
+                        seed_value = str(data[key]).strip()
+                        # Check if it looks like a seed (multiple words)
+                        if ' ' in seed_value and len(seed_value.split()) >= 12:
+                            results['seeds'].append(seed_value)
                 
                 # Look for private keys
-                for key in ['privateKey', 'private_key', 'privKey', 'key']:
+                key_fields = [
+                    'privateKey', 'private_key', 'privKey', 'priv_key', 'key',
+                    'secretKey', 'secret_key', 'walletKey', 'wallet_key'
+                ]
+                
+                for key in key_fields:
                     if key in data and data[key]:
                         results['keys'].append({
                             'type': 'JSON_PRIVATE_KEY',
@@ -184,14 +206,19 @@ class WalletFileScanner:
                         })
                 
                 # Look for addresses
-                for key in ['address', 'addresses', 'publicKey', 'public_key']:
+                addr_fields = [
+                    'address', 'addresses', 'publicKey', 'public_key',
+                    'walletAddress', 'wallet_address', 'account', 'accounts'
+                ]
+                
+                for key in addr_fields:
                     if key in data:
                         if isinstance(data[key], list):
                             results['addresses'].extend([str(a) for a in data[key] if a])
                         elif data[key]:
                             results['addresses'].append(str(data[key]))
                 
-                # Recursive search for nested data
+                # Recursive search for nested data (browser extensions often nest data)
                 self._search_json_recursive(data, results)
             
         except json.JSONDecodeError:
@@ -203,8 +230,8 @@ class WalletFileScanner:
         return results
     
     def _search_json_recursive(self, obj: Any, results: Dict, depth: int = 0):
-        """Recursively search JSON for wallet data"""
-        if depth > 10:  # Prevent infinite recursion
+        """Recursively search JSON for wallet data - AGGRESSIVE"""
+        if depth > 15:  # Increased depth for nested extensions
             return
         
         try:
@@ -212,21 +239,33 @@ class WalletFileScanner:
                 for key, value in obj.items():
                     key_lower = str(key).lower()
                     
-                    # Check for seed-related keys
-                    if any(x in key_lower for x in ['seed', 'mnemonic', 'phrase']):
+                    # Check for seed-related keys - EXPANDED LIST
+                    seed_indicators = [
+                        'seed', 'mnemonic', 'phrase', 'recovery', 'backup',
+                        'words', 'secret', 'wallet', 'account'
+                    ]
+                    
+                    if any(indicator in key_lower for indicator in seed_indicators):
                         if isinstance(value, str) and len(value) > 30:
-                            results['seeds'].append(value)
+                            # Check if it's a space-separated word list
+                            word_count = len(value.split())
+                            if word_count in [12, 15, 18, 21, 24]:
+                                results['seeds'].append(value)
                     
-                    # Check for key-related keys
-                    if any(x in key_lower for x in ['private', 'priv', 'key']):
+                    # Check for key-related keys - EXPANDED
+                    key_indicators = ['private', 'priv', 'key', 'secret']
+                    
+                    if any(indicator in key_lower for indicator in key_indicators):
                         if isinstance(value, str) and len(value) > 40:
-                            results['keys'].append({'type': 'JSON_KEY', 'key': value})
+                            # Looks like a hex key or WIF format
+                            if all(c in '0123456789abcdefABCDEFxKL' for c in value):
+                                results['keys'].append({'type': 'JSON_KEY', 'key': value})
                     
-                    # Recurse
+                    # Recurse deeper
                     self._search_json_recursive(value, results, depth + 1)
                     
             elif isinstance(obj, list):
-                for item in obj[:50]:  # Limit list processing
+                for item in obj[:100]:  # Increased limit
                     self._search_json_recursive(item, results, depth + 1)
                     
         except:
@@ -234,8 +273,8 @@ class WalletFileScanner:
     
     def extract_from_log(self, file_path: str) -> Dict[str, List]:
         """
-        Extract wallet data from .log files
-        Common in Bitcoin Core, Electrum, etc.
+        Extract wallet data from .log and .txt files
+        Common in Bitcoin Core, Electrum, and mnemonic backups
         """
         results = {
             'seeds': [],
@@ -248,12 +287,40 @@ class WalletFileScanner:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
             
+            # AGGRESSIVE SEED EXTRACTION for mnemonic.txt and similar files
+            # If filename suggests it's a seed file, be more aggressive
+            filename = os.path.basename(file_path).lower()
+            is_seed_file = any(word in filename for word in ['mnemonic', 'seed', 'phrase', 'recovery', 'backup'])
+            
+            if is_seed_file:
+                # For dedicated seed files, try to extract entire content as seed
+                lines = content.strip().split('\n')
+                for line in lines:
+                    line_clean = re.sub(r'[^a-z\s]', ' ', line.lower())
+                    line_clean = re.sub(r'\s+', ' ', line_clean).strip()
+                    words = line_clean.split()
+                    
+                    # Check if line is a valid seed phrase
+                    if len(words) in [12, 15, 18, 21, 24]:
+                        # All words should be alphabetic and reasonable length
+                        if all(3 <= len(w) <= 10 and w.isalpha() for w in words):
+                            results['seeds'].append(' '.join(words))
+            
             # Look for seed phrases in logs (sometimes logged by mistake)
-            seed_pattern = r'(?:seed|mnemonic|phrase)[\s:=]+([a-z\s]{50,200})'
-            for match in re.finditer(seed_pattern, content, re.IGNORECASE):
-                seed_candidate = match.group(1).strip()
-                if len(seed_candidate.split()) in [12, 15, 18, 21, 24]:
-                    results['seeds'].append(seed_candidate)
+            seed_patterns = [
+                r'(?:seed|mnemonic|phrase|recovery|backup)[\s:=\-]+([a-z\s]{50,300})',
+                r'(?:12|15|18|21|24)\s*(?:word|words)[\s:=\-]+([a-z\s]{50,300})',
+            ]
+            
+            for pattern in seed_patterns:
+                for match in re.finditer(pattern, content, re.IGNORECASE):
+                    seed_candidate = match.group(1).strip()
+                    seed_clean = re.sub(r'[^a-z\s]', ' ', seed_candidate.lower())
+                    seed_clean = re.sub(r'\s+', ' ', seed_clean).strip()
+                    words = seed_clean.split()
+                    
+                    if len(words) in [12, 15, 18, 21, 24]:
+                        results['seeds'].append(' '.join(words))
             
             # Look for private keys in logs
             key_pattern = r'(?:private|priv|key)[\s:=]+([a-fA-F0-9]{50,66})'

@@ -822,28 +822,43 @@ class UltraAdvancedScanner:
     
     def extract_mail_access(self, content: str) -> List[Dict]:
         """
-        Extract mail access credentials (SMTP, IMAP, POP3)
+        Extract mail access credentials from stealer logs
+        Handles multiple formats:
+        - URL: https://accounts.google.com/ Username: email Password: pass
+        - Email: pass format
+        - JSON credential format
         """
         mail_accounts = []
         seen = set()
         
-        # SMTP patterns
-        smtp_pattern = r'(?:smtp|mail)[._-]?(?:server|host)[:\s=]+([^\s;,]+)'
-        smtp_servers = set(re.findall(smtp_pattern, content, re.IGNORECASE))
+        # Pattern 1: Stealer log format (most common in real logs)
+        # URL: https://... \n Username: email \n Password: pass
+        stealer_pattern = r'URL:\s*([^\n]+)\s*(?:Username|Login):\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s*Password:\s*([^\n]+?)(?:\s*Application:|\s*$|\s*===)'
+        stealer_matches = re.findall(stealer_pattern, content, re.IGNORECASE | re.MULTILINE | re.DOTALL)
         
-        # IMAP patterns
-        imap_pattern = r'imap[._-]?(?:server|host)[:\s=]+([^\s;,]+)'
-        imap_servers = set(re.findall(imap_pattern, content, re.IGNORECASE))
-        
-        # POP3 patterns
-        pop3_pattern = r'pop3?[._-]?(?:server|host)[:\s=]+([^\s;,]+)'
-        pop3_servers = set(re.findall(pop3_pattern, content, re.IGNORECASE))
-        
-        # Extract email credentials
-        email_pattern = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})[:\s]+([^\s]{4,})'
-        matches = re.findall(email_pattern, content, re.IGNORECASE)
-        
-        for email, password in matches:
+        for url, email, password in stealer_matches:
+            email = email.strip()
+            password = password.strip()
+            
+            # Skip if password is empty or too short
+            if not password or len(password) < 4:
+                continue
+            
+            # Skip form field names (common false positives)
+            field_names = [
+                'password', 'passwd', 'pass', 'pwd', 'username', 'user', 'email', 'mail',
+                'login', 'loginfmt', 'userid', 'member_first_name', 'nameOnCard',
+                'shippingName', 'registrationEmail', 'login_email', 'userName',
+                'offerAmount', 'policyNumber', 'majorWeight', 'text-', 'kl-consent',
+                'roompicker', 'sgE-', 'txtZipcode', 'q9_', 'seventhCtrl'
+            ]
+            
+            password_lower = password.lower()
+            if any(field in password_lower for field in field_names):
+                # Check if it looks like a form field name/ID
+                if len(password) < 30 and not any(c in password for c in ['@', '!', '#', '$', '%']):
+                    continue
+            
             key = f"{email}:{password}"
             if key in seen:
                 continue
@@ -851,49 +866,8 @@ class UltraAdvancedScanner:
             
             # Determine provider
             domain = email.split('@')[1].lower() if '@' in email else ''
-            provider = 'Unknown'
-            
-            provider_map = {
-                'gmail.com': 'Gmail',
-                'outlook.com': 'Outlook',
-                'hotmail.com': 'Hotmail',
-                'yahoo.com': 'Yahoo',
-                'icloud.com': 'iCloud',
-                'protonmail.com': 'ProtonMail',
-            }
-            
-            provider = provider_map.get(domain, domain.split('.')[0].title() if domain else 'Unknown')
-            
-            # Try to match with servers
-            smtp = None
-            imap = None
-            pop3 = None
-            
-            for server in smtp_servers:
-                if domain in server.lower():
-                    smtp = server
-                    break
-            
-            for server in imap_servers:
-                if domain in server.lower():
-                    imap = server
-                    break
-            
-            for server in pop3_servers:
-                if domain in server.lower():
-                    pop3 = server
-                    break
-            
-            # Default servers if not found
-            if not smtp and 'gmail' in domain:
-                smtp = 'smtp.gmail.com:587'
-                imap = 'imap.gmail.com:993'
-            elif not smtp and 'outlook' in domain or 'hotmail' in domain:
-                smtp = 'smtp-mail.outlook.com:587'
-                imap = 'outlook.office365.com:993'
-            elif not smtp and 'yahoo' in domain:
-                smtp = 'smtp.mail.yahoo.com:587'
-                imap = 'imap.mail.yahoo.com:993'
+            provider = self._get_mail_provider(domain)
+            smtp, imap = self._get_mail_servers(domain)
             
             mail_accounts.append({
                 'email': email,
@@ -901,10 +875,88 @@ class UltraAdvancedScanner:
                 'provider': provider,
                 'smtp': smtp,
                 'imap': imap,
-                'pop3': pop3
+                'pop3': None,
+                'url': url.strip() if url else None
+            })
+        
+        # Pattern 2: Simple email:password format
+        simple_pattern = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})[:\s]+([^\s\n]{6,50})'
+        simple_matches = re.findall(simple_pattern, content, re.IGNORECASE)
+        
+        for email, password in simple_matches:
+            email = email.strip()
+            password = password.strip()
+            
+            # Skip if already found
+            key = f"{email}:{password}"
+            if key in seen:
+                continue
+            
+            # Skip form field names
+            password_lower = password.lower()
+            if any(field in password_lower for field in ['password', 'username', 'email', 'login', 'user']):
+                continue
+            
+            # Must have good password characteristics
+            if len(password) < 6 or not any(c.isalnum() for c in password):
+                continue
+            
+            seen.add(key)
+            
+            domain = email.split('@')[1].lower() if '@' in email else ''
+            provider = self._get_mail_provider(domain)
+            smtp, imap = self._get_mail_servers(domain)
+            
+            mail_accounts.append({
+                'email': email,
+                'password': password,
+                'provider': provider,
+                'smtp': smtp,
+                'imap': imap,
+                'pop3': None,
+                'url': None
             })
         
         return mail_accounts
+    
+    def _get_mail_provider(self, domain: str) -> str:
+        """Get mail provider name from domain"""
+        provider_map = {
+            'gmail.com': 'Gmail',
+            'googlemail.com': 'Gmail',
+            'outlook.com': 'Outlook',
+            'hotmail.com': 'Hotmail',
+            'live.com': 'Outlook',
+            'yahoo.com': 'Yahoo',
+            'yahoo.co.uk': 'Yahoo',
+            'icloud.com': 'iCloud',
+            'me.com': 'iCloud',
+            'protonmail.com': 'ProtonMail',
+            'proton.me': 'ProtonMail',
+            'aol.com': 'AOL',
+            'mail.com': 'Mail.com',
+            'zoho.com': 'Zoho',
+            'yandex.com': 'Yandex',
+            'comcast.net': 'Comcast',
+            'att.net': 'AT&T',
+            'verizon.net': 'Verizon',
+        }
+        return provider_map.get(domain, domain.split('.')[0].title() if domain else 'Unknown')
+    
+    def _get_mail_servers(self, domain: str) -> tuple:
+        """Get SMTP and IMAP servers for domain"""
+        server_map = {
+            'gmail.com': ('smtp.gmail.com:587', 'imap.gmail.com:993'),
+            'googlemail.com': ('smtp.gmail.com:587', 'imap.gmail.com:993'),
+            'outlook.com': ('smtp-mail.outlook.com:587', 'outlook.office365.com:993'),
+            'hotmail.com': ('smtp-mail.outlook.com:587', 'outlook.office365.com:993'),
+            'live.com': ('smtp-mail.outlook.com:587', 'outlook.office365.com:993'),
+            'yahoo.com': ('smtp.mail.yahoo.com:587', 'imap.mail.yahoo.com:993'),
+            'icloud.com': ('smtp.mail.me.com:587', 'imap.mail.me.com:993'),
+            'aol.com': ('smtp.aol.com:587', 'imap.aol.com:993'),
+            'comcast.net': ('smtp.comcast.net:587', 'imap.comcast.net:993'),
+        }
+        return server_map.get(domain, (None, None))
     
     def extract_cookies(self, content: str) -> List[Dict]:
         """Extract browser cookies with enhanced patterns + STRICT VALIDATION"""
