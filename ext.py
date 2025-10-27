@@ -3083,6 +3083,7 @@ class SensitiveDataDetector:
     
     def scan_file_for_sensitive_data(self, file_path):
         """Scan file for all sensitive data patterns"""
+        found_count = 0
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
@@ -3106,15 +3107,19 @@ class SensitiveDataDetector:
                         }
                         
                         self.found_data.append(sensitive_item)
+                        found_count += 1
                         
                         # Real-time display
                         self.status_callback(
                             f"{config['icon']} FOUND {config['name']}: {match[:30]}...",
                             "success"
                         )
+            
+            return found_count  # Return count of items found
         
         except Exception as e:
             logger.debug(f"Sensitive data scan error: {e}")
+            return 0
     
     def get_statistics(self):
         """Get statistics by type"""
@@ -3773,7 +3778,9 @@ class UltimateProductionScanner:
             'hosting_services_found': 0,
             'smtp_services_found': 0,
             'total_usd_value': 0.0,
-            'private_keys_found': 0
+            'private_keys_found': 0,
+            'sensitive_data_found': 0,  # NEW: Track API keys, tokens, etc.
+            'api_keys_found': 0  # NEW: Specific counter for API keys
         }
     
     def scan_complete_system(self, target_dir, progress_cb, status_cb, options=None):
@@ -4212,7 +4219,10 @@ class UltimateProductionScanner:
                             
                             # 3. Sensitive data (AWS, Stripe, SSH, APIs - Fast)
                             if opts.get('extract_sensitive', True):
-                                self.sensitive_data_detector.scan_file_for_sensitive_data(file_path)
+                                found_count = self.sensitive_data_detector.scan_file_for_sensitive_data(file_path)
+                                if found_count > 0:
+                                    self.stats['sensitive_data_found'] += found_count
+                                    self.stats['api_keys_found'] += found_count
                             
                             # 4. SMS APIs (Twilio, Nexmo - Fast pattern matching)
                             if opts.get('extract_sms_apis', True) and hasattr(self, 'sms_detector'):
@@ -9464,7 +9474,8 @@ class LulzSecEnhancedGUI:
             ("🌱 Seeds", 'seeds', self.theme.colors['neon_pink']),
             ("✅ Validated", 'validated', self.theme.colors['neon_green']),
             ("🔑 Credentials", 'credentials', self.theme.colors['neon_orange']),
-            ("📱 SMS APIs", 'sms', self.theme.colors['neon_purple']),
+            ("� API Keys", 'api_keys', self.theme.colors['neon_red']),  # NEW
+            ("�📱 SMS APIs", 'sms', self.theme.colors['neon_purple']),
             ("☁️ Services", 'services', self.theme.colors['neon_cyan']),
             ("💵 USD Value", 'usd', self.theme.colors['neon_yellow'])
         ]
@@ -12007,6 +12018,7 @@ class LulzSecEnhancedGUI:
                 self.mini_stats['seeds'].set(str(stats.get('seeds_found', 0)))
                 self.mini_stats['credentials'].set(str(stats.get('credentials_found', 0)))
                 self.mini_stats['validated'].set(str(stats.get('validated_seeds', 0)))
+                self.mini_stats['api_keys'].set(str(stats.get('api_keys_found', 0)))  # NEW
                 self.mini_stats['sms'].set(str(stats.get('sms_apis_found', 0)))
                 self.mini_stats['services'].set(str(stats.get('hosting_services_found', 0)))
                 self.mini_stats['usd'].set(f"${stats.get('total_usd_value', 0.0):.2f}")
