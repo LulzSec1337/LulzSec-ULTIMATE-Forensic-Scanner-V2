@@ -2,13 +2,27 @@
 """
 🔥 ULTRA-ADVANCED COMPREHENSIVE SCANNER - Federal-Grade Forensics
 Maximum extraction power with all payloads and patterns
+ENHANCED: Wallet file targeting + strict validation
 """
 
 import re
 import os
 import json
+import sys
 from typing import List, Dict, Any
 from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import specialized scanners and validators
+try:
+    from core.wallet_file_scanner import WalletFileScanner
+    from validators.data_validator import DataValidator
+except ImportError:
+    # Fallback if imports fail
+    WalletFileScanner = None
+    DataValidator = None
 
 
 class UltraAdvancedScanner:
@@ -32,6 +46,10 @@ class UltraAdvancedScanner:
     def __init__(self, crypto_utils, db):
         self.crypto_utils = crypto_utils
         self.db = db
+        
+        # Initialize specialized scanners
+        self.wallet_file_scanner = WalletFileScanner() if WalletFileScanner else None
+        self.validator = DataValidator() if DataValidator else None
         
         # MAXIMUM wallet patterns - ALL NETWORKS + Extensions
         self.wallet_patterns = {
@@ -236,6 +254,38 @@ class UltraAdvancedScanner:
         }
         
         try:
+            # FIRST: Check if this is a wallet file and use specialized scanner
+            if self.wallet_file_scanner and self.wallet_file_scanner.is_wallet_file(file_path):
+                wallet_results = self.wallet_file_scanner.scan_file(file_path)
+                
+                # Merge wallet-specific extractions
+                if wallet_results:
+                    # Add seeds from wallet files
+                    if wallet_results.get('seeds'):
+                        for seed in wallet_results['seeds']:
+                            if self._validate_and_filter_seed(seed):
+                                results['seeds'].append(seed)
+                    
+                    # Add keys from wallet files
+                    if wallet_results.get('keys'):
+                        for key_data in wallet_results['keys']:
+                            if isinstance(key_data, dict):
+                                results['private_keys'].append(key_data)
+                    
+                    # Add addresses from wallet files
+                    if wallet_results.get('addresses'):
+                        for addr in wallet_results['addresses']:
+                            # Try to detect network
+                            network = self._detect_network(addr)
+                            if network and self.validator:
+                                if self.validator.validate_wallet_address(addr, network):
+                                    results['wallets'].append({
+                                        'network': network,
+                                        'address': addr,
+                                        'pattern': 'wallet_file'
+                                    })
+            
+            # SECOND: Standard text extraction
             # Try multiple encodings
             content = None
             for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
@@ -250,9 +300,9 @@ class UltraAdvancedScanner:
                 return results
             
             # Extract everything
-            results['wallets'] = self.extract_wallets(content)
-            results['seeds'] = self.extract_seeds_comprehensive(content)
-            results['private_keys'] = self.extract_private_keys(content)
+            results['wallets'].extend(self.extract_wallets(content))
+            results['seeds'].extend(self.extract_seeds_comprehensive(content))
+            results['private_keys'].extend(self.extract_private_keys(content))
             results['credentials'] = self.extract_credentials(content)
             results['urls'] = self.extract_urls(content)
             results['sms_apis'] = self.extract_sms_apis(content)
@@ -265,6 +315,30 @@ class UltraAdvancedScanner:
             pass
         
         return results
+    
+    def _detect_network(self, address: str) -> str:
+        """Detect network type from address format"""
+        try:
+            if address.startswith(('1', '3', 'bc1')):
+                return 'BTC'
+            elif address.startswith('0x') and len(address) == 42:
+                return 'ETH'
+            elif address.startswith('T'):
+                return 'TRX'
+            elif len(address) >= 32 and len(address) <= 44:
+                return 'SOL'
+            elif address.startswith(('L', 'M', 'ltc1')):
+                return 'LTC'
+            elif address.startswith('D'):
+                return 'DOGE'
+            elif address.startswith('r'):
+                return 'XRP'
+            elif address.startswith('addr1') or address.startswith('DdzFF'):
+                return 'ADA'
+            else:
+                return 'UNKNOWN'
+        except:
+            return 'UNKNOWN'
     
     def scan_file_content(self, content: str, source_name: str = "content") -> Dict[str, Any]:
         """
@@ -310,7 +384,7 @@ class UltraAdvancedScanner:
         return results
     
     def extract_wallets(self, content: str) -> List[Dict]:
-        """Extract all wallet addresses with maximum patterns"""
+        """Extract all wallet addresses with maximum patterns + STRICT VALIDATION"""
         wallets = []
         
         for network, patterns in self.wallet_patterns.items():
@@ -322,6 +396,11 @@ class UltraAdvancedScanner:
                             match = match[0] if match[0] else match[1]
                         
                         if match and len(match) > 10:  # Valid length
+                            # STRICT VALIDATION: Use validator if available
+                            if self.validator:
+                                if not self.validator.validate_wallet_address(match, network):
+                                    continue  # Skip invalid/fake addresses
+                            
                             wallets.append({
                                 'network': network,
                                 'address': match,
@@ -540,7 +619,7 @@ class UltraAdvancedScanner:
         return True
     
     def extract_private_keys(self, content: str) -> List[Dict]:
-        """Extract private keys with smart validation"""
+        """Extract private keys with STRICT validation"""
         keys = []
         seen = set()
         
@@ -558,9 +637,14 @@ class UltraAdvancedScanner:
                     if len(key) < 50 or key in seen:
                         continue
                     
-                    # Validate key format
+                    # Validate key format (internal check)
                     if not self._is_valid_private_key(key, key_type):
                         continue
+                    
+                    # STRICT VALIDATION: Use validator if available
+                    if self.validator:
+                        if not self.validator.validate_private_key(key, key_type):
+                            continue  # Skip invalid/fake keys
                     
                     seen.add(key)
                     keys.append({
@@ -587,7 +671,7 @@ class UltraAdvancedScanner:
             return False
     
     def extract_credentials(self, content: str) -> List[Dict]:
-        """Extract email:password and username:password with smart filtering"""
+        """Extract email:password and username:password with STRICT filtering"""
         credentials = []
         seen = set()
         
@@ -599,9 +683,14 @@ class UltraAdvancedScanner:
                         username = match[0].strip()
                         password = match[1].strip()
                         
-                        # Skip invalid credentials
+                        # Internal validation
                         if not self._is_valid_credential(username, password):
                             continue
+                        
+                        # STRICT VALIDATION: Use validator if available
+                        if self.validator:
+                            if not self.validator.validate_credential(username, password):
+                                continue  # Skip invalid/fake credentials
                         
                         # Deduplicate
                         cred_key = f"{username}:{password}"
@@ -818,7 +907,7 @@ class UltraAdvancedScanner:
         return mail_accounts
     
     def extract_cookies(self, content: str) -> List[Dict]:
-        """Extract browser cookies with enhanced patterns"""
+        """Extract browser cookies with enhanced patterns + STRICT VALIDATION"""
         cookies = []
         seen = set()
         
@@ -860,6 +949,14 @@ class UltraAdvancedScanner:
                                 'name': 'cookie',
                                 'value': match[0].strip() if match[0] else str(match)
                             }
+                        
+                        # STRICT VALIDATION: Use validator if available
+                        if self.validator:
+                            domain = cookie.get('domain', 'unknown')
+                            name = cookie.get('name', '')
+                            value = cookie.get('value', '')
+                            if not self.validator.validate_cookie(domain, name, value):
+                                continue  # Skip invalid/fake cookies
                         
                         # Check for duplicates
                         cookie_key = f"{cookie.get('name')}:{cookie.get('value')[:50]}"
