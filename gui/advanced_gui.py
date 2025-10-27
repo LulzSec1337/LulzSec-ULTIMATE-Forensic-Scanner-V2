@@ -705,7 +705,67 @@ class LulzSecAdvancedGUI:
                                                        wrap=tk.WORD)
         self.apikeys_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Tab 9: Logs
+        # Tab 9: URL Access Extractor (NEW - with input and sub-tabs)
+        url_access_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
+        notebook.add(url_access_tab, text="🌐 URL Access")
+        
+        # Input frame at top
+        url_input_frame = tk.Frame(url_access_tab, bg=self.theme.colors['bg_secondary'])
+        url_input_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        tk.Label(url_input_frame, text="Target URL:",
+                bg=self.theme.colors['bg_secondary'],
+                fg=self.theme.colors['fg'],
+                font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT, padx=5)
+        
+        self.url_input = tk.Entry(url_input_frame,
+                                  bg=self.theme.colors['bg_tertiary'],
+                                  fg=self.theme.colors['fg'],
+                                  font=('Segoe UI', 10),
+                                  insertbackground=self.theme.colors['accent'])
+        self.url_input.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        self.url_input.insert(0, "https://example.com")
+        
+        self.extract_url_btn = tk.Button(url_input_frame,
+                                         text="🔍 Extract Data",
+                                         command=self.extract_url_access,
+                                         bg=self.theme.colors['accent'],
+                                         fg='white',
+                                         font=('Segoe UI', 10, 'bold'),
+                                         relief='flat',
+                                         cursor='hand2',
+                                         padx=20)
+        self.extract_url_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # Sub-tabs for cookies and credentials
+        url_notebook = ttk.Notebook(url_access_tab)
+        url_notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Sub-tab 1: Cookies from URL
+        url_cookies_tab = tk.Frame(url_notebook, bg=self.theme.colors['bg'])
+        url_notebook.add(url_cookies_tab, text="🍪 Cookies")
+        
+        self.url_cookies_text = scrolledtext.ScrolledText(url_cookies_tab,
+                                                          bg=self.theme.colors['bg_tertiary'],
+                                                          fg=self.theme.colors['fg'],
+                                                          font=self.theme.fonts['mono_small'],
+                                                          insertbackground=self.theme.colors['accent'],
+                                                          wrap=tk.WORD)
+        self.url_cookies_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Sub-tab 2: Credentials from URL
+        url_creds_tab = tk.Frame(url_notebook, bg=self.theme.colors['bg'])
+        url_notebook.add(url_creds_tab, text="🔐 Credentials")
+        
+        self.url_creds_text = scrolledtext.ScrolledText(url_creds_tab,
+                                                        bg=self.theme.colors['bg_tertiary'],
+                                                        fg=self.theme.colors['fg'],
+                                                        font=self.theme.fonts['mono_small'],
+                                                        insertbackground=self.theme.colors['accent'],
+                                                        wrap=tk.WORD)
+        self.url_creds_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tab 10: Logs
         logs_tab = tk.Frame(notebook, bg=self.theme.colors['bg'])
         notebook.add(logs_tab, text="📋 Logs")
         
@@ -1399,14 +1459,51 @@ class LulzSecAdvancedGUI:
                     if results.get('cookies'):
                         count = len(results['cookies'])
                         total_cookies += count
-                        if count > 0:
-                            self.cookies_text.insert(tk.END, f"\n📄 From: {file_name} ({count} cookies)\n")
-                            self.cookies_text.insert(tk.END, "-" * 80 + "\n")
-                            for cookie in results['cookies'][:50]:
-                                self.cookies_text.insert(tk.END, f"{cookie}\n")
-                            if count > 50:
-                                self.cookies_text.insert(tk.END, f"... and {count - 50} more cookies\n")
-                            self.cookies_text.insert(tk.END, "\n")
+                        self.add_log(f"🍪 {file_name}: Found {count} cookie(s)", "success")
+                        
+                        for cookie_data in results['cookies'][:20]:  # Limit to 20 per file
+                            # CRUD-style cookie display
+                            self.cookies_text.insert(tk.END, "┌" + "─" * 78 + "┐\n")
+                            self.cookies_text.insert(tk.END, f"│ 🍪 COOKIE{' ' * 70}│\n")
+                            self.cookies_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                            
+                            if isinstance(cookie_data, dict):
+                                domain = cookie_data.get('domain', 'Unknown')[:70]
+                                name = cookie_data.get('name', 'Unknown')[:70]
+                                value = cookie_data.get('value', '')
+                                
+                                self.cookies_text.insert(tk.END, f"│ 🌐 Domain: {domain:<65}│\n")
+                                self.cookies_text.insert(tk.END, f"│ 📛 Name: {name:<67}│\n")
+                                
+                                # Split long values across multiple lines
+                                if len(value) > 70:
+                                    self.cookies_text.insert(tk.END, f"│ 💾 Value: {value[:70]:<65}│\n")
+                                    if len(value) > 70:
+                                        self.cookies_text.insert(tk.END, f"│         {value[70:140]:<67}│\n")
+                                else:
+                                    self.cookies_text.insert(tk.END, f"│ 💾 Value: {value:<67}│\n")
+                                
+                                # Save to database
+                                self.db.add_cookie({
+                                    'domain': domain,
+                                    'name': name,
+                                    'value': value,
+                                    'source_file': file_path
+                                })
+                            else:
+                                # Simple string format
+                                cookie_str = str(cookie_data)[:150]
+                                self.cookies_text.insert(tk.END, f"│ {cookie_str[:76]:<76}│\n")
+                                if len(cookie_str) > 76:
+                                    self.cookies_text.insert(tk.END, f"│ {cookie_str[76:150]:<76}│\n")
+                            
+                            self.cookies_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                            self.cookies_text.insert(tk.END, f"│ 📁 Source: {file_name:<64}│\n")
+                            self.cookies_text.insert(tk.END, "└" + "─" * 78 + "┘\n\n")
+                            self.cookies_text.see(tk.END)
+                        
+                        if count > 20:
+                            self.cookies_text.insert(tk.END, f"... and {count - 20} more cookies from this file\n\n")
                             self.cookies_text.see(tk.END)
                 
                 except Exception as e:
@@ -1724,6 +1821,126 @@ class LulzSecAdvancedGUI:
             self.scan_crypto_btn.config(state='normal')
             self.scan_all_btn.config(state='normal')
             self.stop_btn.config(state='disabled')
+    
+    def extract_url_access(self):
+        """Extract cookies and credentials from target URL"""
+        url = self.url_input.get().strip()
+        
+        if not url:
+            messagebox.showerror("Error", "Please enter a URL")
+            return
+        
+        # Add http:// if missing
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        self.add_log(f"🌐 Extracting data from: {url}", "info")
+        
+        # Clear previous results
+        self.url_cookies_text.delete(1.0, tk.END)
+        self.url_creds_text.delete(1.0, tk.END)
+        
+        try:
+            import urllib.parse
+            import re
+            
+            # Extract domain
+            parsed = urllib.parse.urlparse(url)
+            domain = parsed.netloc
+            
+            self.add_log(f"📍 Domain: {domain}", "info")
+            
+            # Search database for cookies matching this domain
+            cookies_found = 0
+            creds_found = 0
+            
+            # Search in cookies database
+            try:
+                conn = self.db.conn if hasattr(self.db, 'conn') else sqlite3.connect(self.db.db_path)
+                cursor = conn.cursor()
+                
+                # Get cookies for this domain
+                cursor.execute('''
+                    SELECT domain, name, value, browser, created_at
+                    FROM cookies
+                    WHERE domain LIKE ? OR domain LIKE ?
+                    ORDER BY created_at DESC
+                ''', (f'%{domain}%', f'%.{domain}'))
+                
+                cookies = cursor.fetchall()
+                
+                if cookies:
+                    self.url_cookies_text.insert(tk.END, "╔══════════════════════════════════════════════════════════════════╗\n")
+                    self.url_cookies_text.insert(tk.END, f"║  🍪 COOKIES FOUND FOR: {domain:<42} ║\n")
+                    self.url_cookies_text.insert(tk.END, "╚══════════════════════════════════════════════════════════════════╝\n\n")
+                    
+                    for cookie in cookies:
+                        cookies_found += 1
+                        domain_val, name, value, browser, created = cookie
+                        
+                        self.url_cookies_text.insert(tk.END, "┌" + "─" * 78 + "┐\n")
+                        self.url_cookies_text.insert(tk.END, f"│ 🍪 COOKIE #{cookies_found:<69}│\n")
+                        self.url_cookies_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                        self.url_cookies_text.insert(tk.END, f"│ 🌐 Domain: {domain_val:<64}│\n")
+                        self.url_cookies_text.insert(tk.END, f"│ 📛 Name: {name:<66}│\n")
+                        self.url_cookies_text.insert(tk.END, f"│ 💾 Value: {value[:70]:<64}│\n")
+                        if len(value) > 70:
+                            self.url_cookies_text.insert(tk.END, f"│         {value[70:140]:<64}│\n")
+                        self.url_cookies_text.insert(tk.END, f"│ 🌐 Browser: {browser if browser else 'Unknown':<62}│\n")
+                        self.url_cookies_text.insert(tk.END, "└" + "─" * 78 + "┘\n\n")
+                else:
+                    self.url_cookies_text.insert(tk.END, f"❌ No cookies found for {domain}\n")
+                    self.url_cookies_text.insert(tk.END, "\nTip: Run a scan on browser data first to populate the database.\n")
+                
+                # Get credentials for this domain
+                cursor.execute('''
+                    SELECT email, password, browser, site_name, created_at
+                    FROM credentials
+                    WHERE url LIKE ? OR site_name LIKE ?
+                    ORDER BY created_at DESC
+                    LIMIT 50
+                ''', (f'%{domain}%', f'%{domain}%'))
+                
+                credentials = cursor.fetchall()
+                
+                if credentials:
+                    self.url_creds_text.insert(tk.END, "╔══════════════════════════════════════════════════════════════════╗\n")
+                    self.url_creds_text.insert(tk.END, f"║  🔐 CREDENTIALS FOUND FOR: {domain:<38} ║\n")
+                    self.url_creds_text.insert(tk.END, "╚══════════════════════════════════════════════════════════════════╝\n\n")
+                    
+                    for cred in credentials:
+                        creds_found += 1
+                        email, password, browser, site, created = cred
+                        
+                        self.url_creds_text.insert(tk.END, "┌" + "─" * 78 + "┐\n")
+                        self.url_creds_text.insert(tk.END, f"│ 🔐 CREDENTIAL #{creds_found:<66}│\n")
+                        self.url_creds_text.insert(tk.END, "├" + "─" * 78 + "┤\n")
+                        self.url_creds_text.insert(tk.END, f"│ 📧 Email: {email:<66}│\n")
+                        self.url_creds_text.insert(tk.END, f"│ 🔑 Password: {password:<62}│\n")
+                        self.url_creds_text.insert(tk.END, f"│ 🌐 Site: {site if site else domain:<67}│\n")
+                        self.url_creds_text.insert(tk.END, f"│ 🌐 Browser: {browser if browser else 'Unknown':<62}│\n")
+                        self.url_creds_text.insert(tk.END, "└" + "─" * 78 + "┘\n\n")
+                else:
+                    self.url_creds_text.insert(tk.END, f"❌ No credentials found for {domain}\n")
+                    self.url_creds_text.insert(tk.END, "\nTip: Run a scan on browser data first to populate the database.\n")
+                
+                if not hasattr(self.db, 'conn'):
+                    conn.close()
+                
+                # Log results
+                if cookies_found > 0 or creds_found > 0:
+                    self.add_log(f"✅ Found {cookies_found} cookie(s) and {creds_found} credential(s) for {domain}", "success")
+                else:
+                    self.add_log(f"⚠️ No data found for {domain} in database", "warning")
+                    
+            except Exception as e:
+                self.add_log(f"❌ Database error: {e}", "error")
+                self.url_cookies_text.insert(tk.END, f"❌ Error accessing database: {e}\n")
+                self.url_creds_text.insert(tk.END, f"❌ Error accessing database: {e}\n")
+                
+        except Exception as e:
+            self.add_log(f"❌ Error: {e}", "error")
+            messagebox.showerror("Error", f"Failed to extract data:\n{e}")
     
     def stop_scan(self):
         """Stop current scan"""
