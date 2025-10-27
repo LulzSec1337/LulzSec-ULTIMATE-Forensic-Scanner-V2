@@ -1119,7 +1119,7 @@ class LulzSecAdvancedGUI:
                                 # Save to database
                                 self.db.add_wallet({
                                     'address': addr,
-                                    'network': network,
+                                    'crypto_type': network,  # Fixed: use crypto_type instead of network
                                     'source_file': file_path
                                 })
                             
@@ -1218,7 +1218,7 @@ class LulzSecAdvancedGUI:
                                                 self.keys_text.insert(tk.END, f"│ {network:8s}: {addr:<66} │\n")
                                                 self.db.add_wallet({
                                                     'address': addr,
-                                                    'network': network,
+                                                    'crypto_type': network,  # Fixed: use crypto_type instead of network
                                                     'private_key': key,
                                                     'source_file': file_path
                                                 })
@@ -1566,7 +1566,7 @@ class LulzSecAdvancedGUI:
                                 # Save to database
                                 self.db.add_wallet({
                                     'address': address,
-                                    'network': network,
+                                    'crypto_type': network,  # Fixed: use crypto_type instead of network
                                     'source_file': file_path
                                 })
                         
