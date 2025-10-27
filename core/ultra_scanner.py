@@ -959,11 +959,65 @@ class UltraAdvancedScanner:
         return server_map.get(domain, (None, None))
     
     def extract_cookies(self, content: str) -> List[Dict]:
-        """Extract browser cookies with enhanced patterns + STRICT VALIDATION"""
+        """
+        Extract browser cookies with NETSCAPE FORMAT support + enhanced patterns
+        
+        Netscape format: domain\tTRUE/FALSE\tpath\tTRUE/FALSE\ttimestamp\tname\tvalue
+        Example: .google.com	TRUE	/	TRUE	1772743330	NID	525=lbuiHM5LeC...
+        """
         cookies = []
         seen = set()
         
-        # Enhanced cookie patterns
+        # Pattern 1: Netscape cookie format (most common in stealer logs)
+        # Format: domain\tflag\tpath\tsecure\texpiration\tname\tvalue
+        netscape_pattern = r'^([^\t]+)\t(TRUE|FALSE)\t([^\t]+)\t(TRUE|FALSE)\t(\d+)\t([^\t]+)\t(.+)$'
+        
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):  # Skip comments
+                continue
+            
+            # Try Netscape format first (tab-separated)
+            match = re.match(netscape_pattern, line)
+            if match:
+                domain, http_only, path, secure, expiration, name, value = match.groups()
+                
+                # Clean and validate
+                domain = domain.strip()
+                name = name.strip()
+                value = value.strip()
+                
+                # Skip if too short or looks fake
+                if len(value) < 3:
+                    continue
+                
+                # Categorize cookie by name (important ones)
+                cookie_type = self._categorize_cookie(name)
+                
+                cookie = {
+                    'domain': domain,
+                    'name': name,
+                    'value': value,
+                    'type': cookie_type,
+                    'expiration': int(expiration),
+                    'secure': secure == 'TRUE',
+                    'path': path
+                }
+                
+                # STRICT VALIDATION
+                if self.validator:
+                    if not self.validator.validate_cookie(domain, name, value):
+                        continue
+                
+                # Check for duplicates
+                cookie_key = f"{domain}:{name}:{value[:30]}"
+                if cookie_key not in seen:
+                    seen.add(cookie_key)
+                    cookies.append(cookie)
+                continue
+        
+        # Pattern 2: Enhanced cookie patterns (fallback for non-Netscape formats)
         cookie_patterns = [
             # Set-Cookie headers
             r'Set-Cookie:\s*([^=]+)=([^;]+)(?:.*?Domain=([^;]+))?',
@@ -982,49 +1036,206 @@ class UltraAdvancedScanner:
             try:
                 matches = re.findall(pattern, content, re.IGNORECASE | re.MULTILINE)
                 for match in matches:
-                    if isinstance(match, tuple):
-                        if len(match) >= 3 and match[2]:  # Has domain
-                            cookie = {
-                                'domain': match[2].strip(),
-                                'name': match[1].strip() if len(match) > 1 else match[0].strip(),
-                                'value': match[2].strip() if len(match) <= 2 else match[2].strip()
-                            }
-                        elif len(match) >= 2:  # Name and value
-                            cookie = {
-                                'domain': 'unknown',
-                                'name': match[0].strip(),
-                                'value': match[1].strip()
-                            }
-                        else:  # Single value
-                            cookie = {
-                                'domain': 'unknown',
-                                'name': 'cookie',
-                                'value': match[0].strip() if match[0] else str(match)
-                            }
+                    if isinstance(match, tuple) and len(match) >= 2:
+                        # Extract domain, name, value based on match length
+                        if len(match) >= 3 and match[2]:
+                            domain, name, value = match[0], match[1], match[2]
+                        else:
+                            domain, name, value = 'unknown', match[0], match[1]
                         
-                        # STRICT VALIDATION: Use validator if available
+                        cookie_type = self._categorize_cookie(name.strip())
+                        
+                        cookie = {
+                            'domain': domain.strip(),
+                            'name': name.strip(),
+                            'value': value.strip(),
+                            'type': cookie_type,
+                            'expiration': 0,
+                            'secure': False,
+                            'path': '/'
+                        }
+                        
+                        # STRICT VALIDATION
                         if self.validator:
-                            domain = cookie.get('domain', 'unknown')
-                            name = cookie.get('name', '')
-                            value = cookie.get('value', '')
-                            if not self.validator.validate_cookie(domain, name, value):
-                                continue  # Skip invalid/fake cookies
+                            if not self.validator.validate_cookie(
+                                cookie['domain'], cookie['name'], cookie['value']
+                            ):
+                                continue
                         
                         # Check for duplicates
-                        cookie_key = f"{cookie.get('name')}:{cookie.get('value')[:50]}"
-                        if cookie_key not in seen and len(cookie.get('value', '')) > 5:
+                        cookie_key = f"{cookie['domain']}:{cookie['name']}:{cookie['value'][:30]}"
+                        if cookie_key not in seen and len(cookie['value']) > 5:
                             seen.add(cookie_key)
                             cookies.append(cookie)
-                    else:
-                        # Single match (full cookie string)
-                        if len(str(match)) > 10:
-                            cookies.append({
-                                'domain': 'unknown',
-                                'name': 'cookie',
-                                'value': str(match).strip()
-                            })
             except:
                 continue
         
-        return cookies[:100]  # Limit to 100 cookies per file
+        return cookies[:200]  # Limit to 200 cookies per file
+    
+    def _categorize_cookie(self, name: str) -> str:
+        """Categorize cookie by name to identify important ones"""
+        name_lower = name.lower()
+        
+        # Authentication cookies
+        auth_keywords = ['auth', 'session', 'token', 'login', 'user', 'sid', 'ssid']
+        if any(kw in name_lower for kw in auth_keywords):
+            return 'authentication'
+        
+        # Social media cookies
+        social_domains = ['facebook', 'twitter', 'instagram', 'linkedin', 'tiktok']
+        if any(social in name_lower for social in social_domains):
+            return 'social'
+        
+        # Payment/Financial
+        payment_keywords = ['payment', 'card', 'paypal', 'stripe', 'wallet']
+        if any(kw in name_lower for kw in payment_keywords):
+            return 'payment'
+        
+        # Tracking cookies
+        tracking_keywords = ['_ga', '_gid', 'analytics', 'track', 'visitor', 'uuid']
+        if any(kw in name_lower for kw in tracking_keywords):
+            return 'tracking'
+        
+        return 'general'
+    
+    def extract_logins_from_stealer(self, content: str) -> List[Dict]:
+        """
+        Extract credentials from Browser/Logins/*.txt files
+        
+        Format:
+        URL: https://www.facebook.com/login/
+        Username: user@example.com
+        Password: SecurePass123
+        ===============
+        """
+        credentials = []
+        seen = set()
+        
+        # Pattern for stealer login format
+        login_pattern = r'URL:\s*([^\n]+)\s*(?:Username|Login):\s*([^\n]+)\s*Password:\s*([^\n]+)'
+        
+        matches = re.findall(login_pattern, content, re.IGNORECASE | re.MULTILINE)
+        
+        for url, username, password in matches:
+            url = url.strip()
+            username = username.strip()
+            password = password.strip()
+            
+            # Skip if any field is too short or looks fake
+            if len(username) < 3 or len(password) < 3:
+                continue
+            
+            # Form field name blacklist (from mail extraction)
+            field_names = [
+                'password', 'passwd', 'pass', 'pwd', 'username', 'user', 'email', 'mail',
+                'login', 'loginfmt', 'userid', 'member_first_name', 'nameOnCard',
+                'shippingName', 'registrationEmail', 'login_email', 'userName'
+            ]
+            
+            password_lower = password.lower()
+            # Skip if password looks like form field name
+            if any(field in password_lower for field in field_names):
+                if len(password) < 30 and not any(c in password for c in ['@', '!', '#', '$', '%']):
+                    continue
+            
+            # Categorize by URL
+            url_lower = url.lower()
+            category = 'general'
+            
+            # Social media
+            if any(site in url_lower for site in ['facebook', 'twitter', 'instagram', 'tiktok', 'linkedin']):
+                category = 'social'
+            # Gaming
+            elif any(site in url_lower for site in ['roblox', 'minecraft', 'steam', 'epic', 'xbox', 'playstation']):
+                category = 'gaming'
+            # Banking/Finance
+            elif any(site in url_lower for site in ['bank', 'paypal', 'stripe', 'coinbase', 'binance']):
+                category = 'finance'
+            # Email
+            elif any(site in url_lower for site in ['mail', 'gmail', 'outlook', 'yahoo', 'proton']):
+                category = 'email'
+            
+            cred = {
+                'url': url,
+                'username': username,
+                'password': password,
+                'category': category
+            }
+            
+            # Check for duplicates
+            cred_key = f"{username}:{password}:{url}"
+            if cred_key not in seen:
+                seen.add(cred_key)
+                credentials.append(cred)
+        
+        return credentials
+    
+    def convert_private_key_to_seed(self, private_key: str, format_type: str = 'hex') -> Dict:
+        """
+        Convert private key to BIP39 seed phrase (if possible)
+        
+        Note: This is a simplified conversion. In reality, BIP39 seeds generate
+        private keys, not the other way around. This provides an approximation
+        for display purposes.
+        """
+        try:
+            # Clean the private key
+            pk = private_key.strip()
+            
+            # Remove common prefixes
+            if pk.startswith('0x'):
+                pk = pk[2:]
+            
+            # Validate format
+            if format_type == 'hex':
+                if len(pk) not in [64, 66]:  # 32 bytes = 64 hex chars
+                    return None
+                if not all(c in '0123456789abcdefABCDEF' for c in pk):
+                    return None
+            elif format_type == 'wif':
+                # WIF format (Bitcoin) - starts with 5, K, or L
+                if not (pk.startswith('5') or pk.startswith('K') or pk.startswith('L')):
+                    return None
+                if len(pk) not in [51, 52]:
+                    return None
+            
+            # For display purposes, generate a deterministic "seed-like" representation
+            # NOTE: This is NOT a real BIP39 seed, just a display representation
+            # Real BIP39 conversion requires the original entropy, which we don't have
+            
+            # Use the private key hash to select words from BIP39 wordlist
+            # This creates a consistent mapping but is NOT cryptographically reversible
+            import hashlib
+            
+            pk_bytes = bytes.fromhex(pk) if format_type == 'hex' else pk.encode()
+            pk_hash = hashlib.sha256(pk_bytes).digest()
+            
+            # Sample BIP39 word list (truncated for demo)
+            bip39_words = [
+                'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract',
+                'absurd', 'abuse', 'access', 'accident', 'account', 'accuse', 'achieve', 'acid',
+                'acoustic', 'acquire', 'across', 'act', 'action', 'actor', 'actress', 'actual',
+                'adapt', 'add', 'addict', 'address', 'adjust', 'admit', 'adult', 'advance',
+                'advice', 'aerobic', 'afford', 'afraid', 'again', 'age', 'agent', 'agree',
+                'ahead', 'aim', 'air', 'airport', 'aisle', 'alarm', 'album', 'alcohol',
+                'alert', 'alien', 'all', 'alley', 'allow', 'almost', 'alone', 'alpha',
+                'already', 'also', 'alter', 'always', 'amateur', 'amazing', 'among', 'amount'
+            ]
+            
+            # Generate 12 "words" based on private key hash
+            seed_words = []
+            for i in range(12):
+                # Use 2 bytes from hash to select word index
+                idx = (pk_hash[i * 2] * 256 + pk_hash[i * 2 + 1]) % len(bip39_words)
+                seed_words.append(bip39_words[idx])
+            
+            return {
+                'original_key': private_key[:20] + '...',  # Truncate for display
+                'format': format_type,
+                'pseudo_seed': ' '.join(seed_words),
+                'note': 'Generated representation (not reversible to original key)'
+            }
+            
+        except Exception as e:
+            return None
 
