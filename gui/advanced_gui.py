@@ -999,39 +999,8 @@ class LulzSecAdvancedGUI:
             self.sms_text.delete(1.0, tk.END)
             self.apikeys_text.delete(1.0, tk.END)
             
-            # Add headers to tabs
-            self.wallets_text.insert(tk.END, "💰 WALLET ADDRESSES\n")
-            self.wallets_text.insert(tk.END, "=" * 80 + "\n")
-            self.wallets_text.insert(tk.END, "Extracting wallet addresses from all supported networks...\n\n")
-            
-            self.seeds_text.insert(tk.END, "🌱 SEED PHRASES (12/15/18/21/24 WORDS)\n")
-            self.seeds_text.insert(tk.END, "=" * 80 + "\n")
-            self.seeds_text.insert(tk.END, "Extracting and validating BIP39 seed phrases...\n")
-            self.seeds_text.insert(tk.END, "All seeds will be validated and tested against BIP39 wordlist\n\n")
-            
-            self.keys_text.insert(tk.END, "🔑 PRIVATE KEYS (ALL FORMATS)\n")
-            self.keys_text.insert(tk.END, "=" * 80 + "\n")
-            self.keys_text.insert(tk.END, "Extracting private keys in all formats (HEX, WIF, etc.)...\n\n")
-            
-            self.creds_text.insert(tk.END, "🔐 CREDENTIALS\n")
-            self.creds_text.insert(tk.END, "=" * 80 + "\n")
-            self.creds_text.insert(tk.END, "Extracting email:password and username:password combinations...\n\n")
-            
-            self.mail_text.insert(tk.END, "📧 MAIL ACCESS (SMTP/IMAP/POP3)\n")
-            self.mail_text.insert(tk.END, "=" * 80 + "\n")
-            self.mail_text.insert(tk.END, "Extracting mail server credentials and configurations...\n\n")
-            
-            self.cookies_text.insert(tk.END, "🍪 BROWSER COOKIES\n")
-            self.cookies_text.insert(tk.END, "=" * 80 + "\n")
-            self.cookies_text.insert(tk.END, "Extracting browser cookies and session data...\n\n")
-            
-            self.sms_text.insert(tk.END, "📱 SMS API CREDENTIALS\n")
-            self.sms_text.insert(tk.END, "=" * 80 + "\n")
-            self.sms_text.insert(tk.END, "Detecting SMS API credentials (Twilio, Nexmo, Plivo, etc.)...\n\n")
-            
-            self.apikeys_text.insert(tk.END, "🔑 API KEYS (100+ SERVICES)\n")
-            self.apikeys_text.insert(tk.END, "=" * 80 + "\n")
-            self.apikeys_text.insert(tk.END, "Extracting API keys from AWS, Stripe, GitHub, OpenAI, etc...\n\n")
+            # Tabs are now clean and ready for CRUD-style data display
+            # Data will appear in real-time as it's extracted
             
             # Count files first
             total_files = 0
@@ -1087,17 +1056,38 @@ class LulzSecAdvancedGUI:
                 self.progress_var.set(progress)
                 self.progress_percent_var.set(f"{progress:.1f}%")
                 
-                # Calculate speed
+                # Calculate speed and update live stats
                 elapsed = time.time() - start_time
                 if elapsed > 0:
                     speed = files_scanned / elapsed
                     self.metrics['files_per_second'] = speed
+                    self.speed_var.set(f"{speed:.1f} files/s")
+                    
+                    # Update elapsed time
+                    hours, rem = divmod(int(elapsed), 3600)
+                    minutes, seconds = divmod(rem, 60)
+                    self.elapsed_time_var.set(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
                     
                     # Estimate remaining time
                     remaining_files = total_files - files_scanned
                     if speed > 0:
                         remaining_time = remaining_files / speed
                         self.metrics['estimated_time_remaining'] = remaining_time
+                        hours, rem = divmod(int(remaining_time), 3600)
+                        minutes, seconds = divmod(rem, 60)
+                        self.remaining_time_var.set(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+                
+                # Update live statistics counters
+                self.mini_stats['files'].set(str(files_scanned))
+                self.mini_stats['wallets'].set(str(total_wallets))
+                self.mini_stats['seeds'].set(str(total_seeds))
+                self.mini_stats['validated'].set(str(total_seeds))
+                self.mini_stats['credentials'].set(str(total_creds))
+                self.mini_stats['cookies'].set(str(total_cookies))
+                self.mini_stats['sms'].set(str(total_sms))
+                
+                # Force UI update for real-time display
+                self.root.update_idletasks()
                 
                 # ULTRA SCAN - Extract EVERYTHING
                 try:
