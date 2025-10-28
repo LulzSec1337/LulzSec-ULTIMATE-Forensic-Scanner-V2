@@ -1,0 +1,66 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama
+    
+    - name: Build executable
+      run: |
+        pyinstaller --onefile --windowed --name=LulzSec-Forensic-Scanner --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --hidden-import=ecdsa --hidden-import=mnemonic --hidden-import=Crypto --hidden-import=Crypto.Cipher --hidden-import=Crypto.Cipher.AES --hidden-import=requests --hidden-import=base58 --hidden-import=colorama --collect-all=tkinter --collect-all=mnemonic --collect-all=ecdsa ext.py
+    
+    - name: Create README for release
+      run: |
+        echo "# LulzSec Forensic Scanner v2.0 - Windows Edition" > dist/README.txt
+        echo "" >> dist/README.txt
+        echo "## Quick Start:" >> dist/README.txt
+        echo "1. Double-click LulzSec-Forensic-Scanner.exe" >> dist/README.txt
+        echo "2. If Windows Defender blocks it, click 'More info' then 'Run anyway'" >> dist/README.txt
+        echo "3. Select your stealer logs folder" >> dist/README.txt
+        echo "4. Click 'SCAN ALL DATA'" >> dist/README.txt
+        echo "" >> dist/README.txt
+        echo "## Features:" >> dist/README.txt
+        echo "- Extract crypto wallets and seed phrases" >> dist/README.txt
+        echo "- Find credentials from browsers" >> dist/README.txt
+        echo "- Detect control panels (cPanel, Plesk, WHM)" >> dist/README.txt
+        echo "- Export to Excel/CSV" >> dist/README.txt
+        echo "" >> dist/README.txt
+        echo "Support: @Lulz1337" >> dist/README.txt
+    
+    - name: Copy config file
+      run: copy api_config.json dist\
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: LulzSec-Forensic-Scanner-Windows
+        path: |
+          dist/LulzSec-Forensic-Scanner.exe
+          dist/README.txt
+          dist/api_config.json
+    
+    - name: Commit executable to repo
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add dist/
+        git diff --quiet && git diff --staged --quiet || (git commit -m "🚀 Auto-build: Windows Executable [skip ci]" && git push)
+      continue-on-error: true
