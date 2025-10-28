@@ -1035,7 +1035,7 @@ python main.py scan /path/to/folder --max-depth 3
 - Review [Troubleshooting](#-troubleshooting) section
 
 #### 💬 Community
-- **Telegram**: [@LulzSec1337](https://t.me/LulzSec1337)
+- **Telegram**: [@Lulz1337](https://t.me/Lulz1337)
 - **GitHub Issues**: [Report bugs or request features](https://github.com/LulzSec1337/LulzSec-ULTIMATE-Forensic-Scanner-V2/issues)
 - **GitHub Discussions**: [Ask questions](https://github.com/LulzSec1337/LulzSec-ULTIMATE-Forensic-Scanner-V2/discussions)
 
@@ -1078,8 +1078,8 @@ When reporting bugs, please include:
 ## 👨‍💻 Credits
 
 ### Developer
-**Coded by**: [@LulzSec1337](https://t.me/LulzSec1337)  
-**Telegram**: https://t.me/LulzSec1337  
+**Coded by**: [@Lulz1337](https://t.me/Lulz1337)  
+**Telegram**: https://t.me/Lulz1337  
 **GitHub**: https://github.com/LulzSec1337  
 
 ### Version
