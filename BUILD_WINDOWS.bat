@@ -28,8 +28,8 @@ echo ═════════════════════════
 echo 📦 Installing PyInstaller and dependencies
 echo ════════════════════════════════════════════════════════════════════════════
 echo.
-python -m pip install --upgrade pip
-python -m pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama
+python -m pip install --upgrade pip --quiet
+python -m pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama --quiet
 echo ✅ Installed
 echo.
 
@@ -48,7 +48,13 @@ echo ═════════════════════════
 echo ⏳ Building... (3-5 minutes)
 echo.
 
-pyinstaller --onefile --windowed --name=LulzSec-Forensic-Scanner --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --hidden-import=ecdsa --hidden-import=mnemonic --hidden-import=Crypto --hidden-import=Crypto.Cipher --hidden-import=Crypto.Cipher.AES --hidden-import=requests --hidden-import=base58 --hidden-import=colorama --collect-all=tkinter --collect-all=mnemonic --collect-all=ecdsa ext.py
+if exist lulzsec_icon.ico (
+    echo    ✅ Using LulzSec icon
+    pyinstaller --onefile --windowed --icon=lulzsec_icon.ico --name=LulzSec-Forensic-Scanner --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --hidden-import=ecdsa --hidden-import=mnemonic --hidden-import=Crypto --hidden-import=Crypto.Cipher --hidden-import=Crypto.Cipher.AES --hidden-import=requests --hidden-import=base58 --hidden-import=colorama --collect-all=tkinter --collect-all=mnemonic --collect-all=ecdsa ext.py
+) else (
+    echo    ⚠️  No icon found
+    pyinstaller --onefile --windowed --name=LulzSec-Forensic-Scanner --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --hidden-import=ecdsa --hidden-import=mnemonic --hidden-import=Crypto --hidden-import=Crypto.Cipher --hidden-import=Crypto.Cipher.AES --hidden-import=requests --hidden-import=base58 --hidden-import=colorama --collect-all=tkinter --collect-all=mnemonic --collect-all=ecdsa ext.py
+)
 
 if errorlevel 1 (
     echo ❌ Main Scanner build failed
@@ -62,7 +68,11 @@ echo ═════════════════════════
 echo 🔨 Building GUI Launcher: LulzSec-GUI-Launcher.exe
 echo ════════════════════════════════════════════════════════════════════════════
 if exist run_gui.py (
-    pyinstaller --onefile --windowed --name=LulzSec-GUI-Launcher --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --collect-all=tkinter run_gui.py
+    if exist lulzsec_icon.ico (
+        pyinstaller --onefile --windowed --icon=lulzsec_icon.ico --name=LulzSec-GUI-Launcher --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --collect-all=tkinter run_gui.py
+    ) else (
+        pyinstaller --onefile --windowed --name=LulzSec-GUI-Launcher --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --collect-all=tkinter run_gui.py
+    )
     if errorlevel 1 (
         echo ⚠️  GUI Launcher failed, but Main Scanner ready
     ) else (

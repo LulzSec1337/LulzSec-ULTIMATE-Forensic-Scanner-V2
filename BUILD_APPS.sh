@@ -51,8 +51,19 @@ echo "✅ Cleaned"
 echo ""
 
 echo "🔨 Building Main Scanner..."
+
+# Build with icon if available
+if [ -f "lulzsec_icon.ico" ]; then
+    ICON_ARG="--icon=lulzsec_icon.ico"
+    echo "   ✅ Using LulzSec icon"
+else
+    ICON_ARG=""
+    echo "   ⚠️  No icon found (run download_icon.sh)"
+fi
+
 python3 -m PyInstaller --onefile --windowed \
     --name=LulzSec-Forensic-Scanner \
+    $ICON_ARG \
     --add-data="api_config.json:." \
     --hidden-import=tkinter --hidden-import=tkinter.ttk \
     --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog \
@@ -74,6 +85,7 @@ echo "🔨 Building GUI Launcher..."
 if [ -f "run_gui.py" ]; then
     python3 -m PyInstaller --onefile --windowed \
         --name=LulzSec-GUI-Launcher \
+        $ICON_ARG \
         --add-data="api_config.json:." \
         --hidden-import=tkinter --hidden-import=tkinter.ttk \
         --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog \

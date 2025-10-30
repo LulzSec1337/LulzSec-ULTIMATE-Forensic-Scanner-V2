@@ -6,7 +6,11 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-# dist/ - DISABLED to allow Windows executable
+# dist/ - ENABLED to track executables
+!dist/*.exe
+!dist/*.app
+!dist/README.txt
+!dist/api_config.json
 downloads/
 eggs/
 .eggs/
