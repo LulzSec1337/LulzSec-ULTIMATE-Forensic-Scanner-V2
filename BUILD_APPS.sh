@@ -18,10 +18,31 @@ fi
 echo "✅ Python: $(python3 --version)"
 echo ""
 
-echo "📦 Installing dependencies..."
-python3 -m pip install --upgrade pip -q
-python3 -m pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama -q
+echo "📦 Installing dependencies (with --break-system-packages for Parrot/Debian)..."
+python3 -m pip install --upgrade pip --break-system-packages -q 2>/dev/null || pip3 install --upgrade pip -q
+python3 -m pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama --break-system-packages -q 2>/dev/null || pip3 install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama -q
 echo "✅ Installed"
+echo ""
+
+# Create api_config.json if missing
+if [ ! -f "api_config.json" ]; then
+    echo "📝 Creating api_config.json..."
+    cat > api_config.json << 'EOF'
+{
+  "etherscan_api_key": "",
+  "bscscan_api_key": "",
+  "polygonscan_api_key": "",
+  "ftmscan_api_key": "",
+  "arbiscan_api_key": "",
+  "optimism_api_key": "",
+  "snowtrace_api_key": "",
+  "hecoinfo_api_key": "",
+  "moonscan_api_key": "",
+  "cronoscan_api_key": ""
+}
+EOF
+    echo "✅ Created api_config.json"
+fi
 echo ""
 
 echo "🧹 Cleaning..."
