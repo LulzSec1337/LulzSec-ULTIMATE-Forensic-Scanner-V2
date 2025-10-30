@@ -6,7 +6,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+# dist/ - DISABLED to allow Windows executable
 downloads/
 eggs/
 .eggs/

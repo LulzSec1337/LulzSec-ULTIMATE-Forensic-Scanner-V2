@@ -23,13 +23,22 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama
     
-    - name: Build executable
+    - name: Build Main Scanner (ext.py)
       run: |
         pyinstaller --onefile --windowed --name=LulzSec-Forensic-Scanner --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --hidden-import=ecdsa --hidden-import=mnemonic --hidden-import=Crypto --hidden-import=Crypto.Cipher --hidden-import=Crypto.Cipher.AES --hidden-import=requests --hidden-import=base58 --hidden-import=colorama --collect-all=tkinter --collect-all=mnemonic --collect-all=ecdsa ext.py
+    
+    - name: Build GUI Launcher (run_gui.py)
+      run: |
+        pyinstaller --onefile --windowed --name=LulzSec-GUI-Launcher --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --collect-all=tkinter run_gui.py
+      continue-on-error: true
     
     - name: Create README for release
       run: |
         echo "# LulzSec Forensic Scanner v2.0 - Windows Edition" > dist/README.txt
+        echo "" >> dist/README.txt
+        echo "## 2 Applications Included:" >> dist/README.txt
+        echo "1. LulzSec-Forensic-Scanner.exe - Main scanner" >> dist/README.txt
+        echo "2. LulzSec-GUI-Launcher.exe - Alternative GUI" >> dist/README.txt
         echo "" >> dist/README.txt
         echo "## Quick Start:" >> dist/README.txt
         echo "1. Double-click LulzSec-Forensic-Scanner.exe" >> dist/README.txt
@@ -37,12 +46,7 @@ jobs:
         echo "3. Select your stealer logs folder" >> dist/README.txt
         echo "4. Click 'SCAN ALL DATA'" >> dist/README.txt
         echo "" >> dist/README.txt
-        echo "## Features:" >> dist/README.txt
-        echo "- Extract crypto wallets and seed phrases" >> dist/README.txt
-        echo "- Find credentials from browsers" >> dist/README.txt
-        echo "- Detect control panels (cPanel, Plesk, WHM)" >> dist/README.txt
-        echo "- Export to Excel/CSV" >> dist/README.txt
-        echo "" >> dist/README.txt
+        echo "## Features: 9 tabs, Control panels, Export, Database" >> dist/README.txt
         echo "Support: @Lulz1337" >> dist/README.txt
     
     - name: Copy config file
@@ -54,13 +58,14 @@ jobs:
         name: LulzSec-Forensic-Scanner-Windows
         path: |
           dist/LulzSec-Forensic-Scanner.exe
+          dist/LulzSec-GUI-Launcher.exe
           dist/README.txt
           dist/api_config.json
     
-    - name: Commit executable to repo
+    - name: Commit executables to repo
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add dist/
-        git diff --quiet && git diff --staged --quiet || (git commit -m "🚀 Auto-build: Windows Executable [skip ci]" && git push)
+        git diff --quiet && git diff --staged --quiet || (git commit -m "🚀 Auto-build: 2 Windows Executables [skip ci]" && git push)
       continue-on-error: true
