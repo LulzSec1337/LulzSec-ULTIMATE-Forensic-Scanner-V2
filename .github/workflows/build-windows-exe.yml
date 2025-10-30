@@ -25,11 +25,19 @@ jobs:
     
     - name: Build Main Scanner (ext.py)
       run: |
-        pyinstaller --onefile --windowed --name=LulzSec-Forensic-Scanner --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --hidden-import=ecdsa --hidden-import=mnemonic --hidden-import=Crypto --hidden-import=Crypto.Cipher --hidden-import=Crypto.Cipher.AES --hidden-import=requests --hidden-import=base58 --hidden-import=colorama --collect-all=tkinter --collect-all=mnemonic --collect-all=ecdsa ext.py
+        if (Test-Path "lulzsec_icon.ico") {
+          pyinstaller --onefile --windowed --icon=lulzsec_icon.ico --name=LulzSec-Forensic-Scanner --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --hidden-import=ecdsa --hidden-import=mnemonic --hidden-import=Crypto --hidden-import=Crypto.Cipher --hidden-import=Crypto.Cipher.AES --hidden-import=requests --hidden-import=base58 --hidden-import=colorama --collect-all=tkinter --collect-all=mnemonic --collect-all=ecdsa ext.py
+        } else {
+          pyinstaller --onefile --windowed --name=LulzSec-Forensic-Scanner --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --hidden-import=ecdsa --hidden-import=mnemonic --hidden-import=Crypto --hidden-import=Crypto.Cipher --hidden-import=Crypto.Cipher.AES --hidden-import=requests --hidden-import=base58 --hidden-import=colorama --collect-all=tkinter --collect-all=mnemonic --collect-all=ecdsa ext.py
+        }
     
     - name: Build GUI Launcher (run_gui.py)
       run: |
-        pyinstaller --onefile --windowed --name=LulzSec-GUI-Launcher --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --collect-all=tkinter run_gui.py
+        if (Test-Path "lulzsec_icon.ico") {
+          pyinstaller --onefile --windowed --icon=lulzsec_icon.ico --name=LulzSec-GUI-Launcher --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --collect-all=tkinter run_gui.py
+        } else {
+          pyinstaller --onefile --windowed --name=LulzSec-GUI-Launcher --add-data="api_config.json;." --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.messagebox --hidden-import=tkinter.filedialog --hidden-import=sqlite3 --collect-all=tkinter run_gui.py
+        }
       continue-on-error: true
     
     - name: Create README for release
