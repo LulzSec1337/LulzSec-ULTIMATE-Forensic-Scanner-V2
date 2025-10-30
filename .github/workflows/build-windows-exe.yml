@@ -23,6 +23,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama
     
+    - name: Prepare api_config.json
+      run: |
+        if (Test-Path "api_config.json.template") {
+          Copy-Item "api_config.json.template" "api_config.json"
+        }
+    
     - name: Build Main Scanner (ext.py)
       run: |
         if (Test-Path "lulzsec_icon.ico") {
