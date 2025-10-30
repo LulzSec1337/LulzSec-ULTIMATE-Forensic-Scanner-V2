@@ -44,7 +44,7 @@ ENV/
 *.swo
 
 # Config files with sensitive data
-api_config.json
+# api_config.json - DISABLED to allow template in repo
 
 # Backup files
 *.bak
