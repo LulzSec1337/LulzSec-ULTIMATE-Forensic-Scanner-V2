@@ -29,7 +29,7 @@ echo 📦 Installing PyInstaller and dependencies
 echo ════════════════════════════════════════════════════════════════════════════
 echo.
 python -m pip install --upgrade pip --quiet
-python -m pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama --quiet
+python -m pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama psutil --quiet
 echo ✅ Installed
 echo.
 

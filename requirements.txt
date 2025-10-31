@@ -9,6 +9,9 @@ base58>=2.1.1
 # Blockchain & APIs
 requests>=2.31.0
 
+# Performance & System Monitoring
+psutil>=5.9.0
+
 # GUI
 # tkinter is built-in with Python
 

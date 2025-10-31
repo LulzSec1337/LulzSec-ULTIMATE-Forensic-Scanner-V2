@@ -20,7 +20,7 @@ echo ""
 
 echo "📦 Installing dependencies (with --break-system-packages for Parrot/Debian)..."
 python3 -m pip install --upgrade pip --break-system-packages -q 2>/dev/null || pip3 install --upgrade pip -q
-python3 -m pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama --break-system-packages -q 2>/dev/null || pip3 install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama -q
+python3 -m pip install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama psutil --break-system-packages -q 2>/dev/null || pip3 install pyinstaller ecdsa mnemonic pycryptodome requests base58 colorama psutil -q
 echo "✅ Installed"
 echo ""
 
