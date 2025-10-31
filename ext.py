@@ -9770,8 +9770,8 @@ class LulzSecEnhancedGUI:
         advanced_opts = [
             ("🔍 Browser Extensions", 'scan_extensions', False),
             ("💾 Wallet Apps", 'scan_apps', False),
-            ("💰 Check Balances", 'check_balances', False),
-            ("💵 Get USD Values", 'get_usd_values', False),
+            ("💰 Check Balances", 'check_balances', True),  # ✅ ENABLED BY DEFAULT
+            ("💵 Get USD Values", 'get_usd_values', True),  # ✅ ENABLED BY DEFAULT
             ("📧 Validate Emails", 'validate_emails', False),
             ("📱 Detect SMS APIs", 'detect_sms_apis', True),
             ("☁️ Find Hosting", 'find_hosting', True),
