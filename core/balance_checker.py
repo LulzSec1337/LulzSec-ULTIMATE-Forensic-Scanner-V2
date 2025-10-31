@@ -139,46 +139,49 @@ class AdvancedBalanceChecker:
     # EVM-Compatible Network Handlers
     
     def get_eth_balance(self, address: str) -> float:
-        """Get Ethereum balance"""
+        """Get Ethereum balance (Etherscan V2 API)"""
         try:
-            endpoint = self.api_config.get_endpoint('ETH')
+            # Use Etherscan V2 API
             api_key = self.api_config.apis.get('etherscan', {}).get('key', '')
             
-            params = {
-                'module': 'account',
-                'action': 'balance',
-                'address': address,
-                'tag': 'latest'
-            }
+            # V2 endpoint with chainid
+            url = f'https://api.etherscan.io/v2/api?chainid=1&module=account&action=balance&address={address}&tag=latest'
             if api_key:
-                params['apikey'] = api_key
+                url += f'&apikey={api_key}'
             
-            response = self.session.get(endpoint, params=params, timeout=10)
+            response = self.session.get(url, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
                 if str(data.get('status')) == '1':
                     return int(data['result']) / 10**18
+            
+            # Fallback: Try Blockscout API (no key needed)
+            logger.debug("Etherscan failed, trying Blockscout fallback")
+            fallback_url = f'https://eth.blockscout.com/api/v2/addresses/{address}'
+            response = self.session.get(fallback_url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                balance_str = data.get('coin_balance', '0')
+                return int(balance_str) / 10**18
+                
         except Exception as e:
             logger.debug(f"ETH balance error: {e}")
         return 0.0
     
     def get_bsc_balance(self, address: str) -> float:
-        """Get Binance Smart Chain balance"""
+        """Get Binance Smart Chain balance (BscScan V2 API)"""
         try:
-            endpoint = self.api_config.get_endpoint('BSC')
+            # Use BscScan V2 API
             api_key = self.api_config.apis.get('bscscan', {}).get('key', '')
             
-            params = {
-                'module': 'account',
-                'action': 'balance',
-                'address': address,
-                'tag': 'latest'
-            }
+            # V2 endpoint
+            url = f'https://api.bscscan.com/v2/api?chainid=56&module=account&action=balance&address={address}&tag=latest'
             if api_key:
-                params['apikey'] = api_key
+                url += f'&apikey={api_key}'
             
-            response = self.session.get(endpoint, params=params, timeout=10)
+            response = self.session.get(url, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
@@ -189,21 +192,17 @@ class AdvancedBalanceChecker:
         return 0.0
     
     def get_polygon_balance(self, address: str) -> float:
-        """Get Polygon balance"""
+        """Get Polygon balance (PolygonScan V2 API)"""
         try:
-            endpoint = self.api_config.get_endpoint('POLYGON')
+            # Use PolygonScan V2 API
             api_key = self.api_config.apis.get('polygonscan', {}).get('key', '')
             
-            params = {
-                'module': 'account',
-                'action': 'balance',
-                'address': address,
-                'tag': 'latest'
-            }
+            # V2 endpoint
+            url = f'https://api.polygonscan.com/v2/api?chainid=137&module=account&action=balance&address={address}&tag=latest'
             if api_key:
-                params['apikey'] = api_key
+                url += f'&apikey={api_key}'
             
-            response = self.session.get(endpoint, params=params, timeout=10)
+            response = self.session.get(url, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()

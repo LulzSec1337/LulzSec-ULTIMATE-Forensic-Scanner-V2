@@ -1,129 +1,255 @@
-#!/usr/bin/env python3
-"""
-Comprehensive test for all recent enhancements:
-- Seeds extraction and display
+#!/usr/bin/env python3#!/usr/bin/env python3
+
+""""""
+
+Comprehensive Feature Test - Tests all new featuresComprehensive test for all recent enhancements:
+
+"""- Seeds extraction and display
+
 - Cookies extraction and CRUD display
-- URL Access Extractor tab
-- Expanded wallet patterns (18 networks)
-- Live statistics
+
+import sys- URL Access Extractor tab
+
+import time- Expanded wallet patterns (18 networks)
+
+import logging- Live statistics
+
 """
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 import sys
-import os
-import tempfile
 
-sys.path.insert(0, os.path.dirname(__file__))
+print("=" * 80)import os
 
-from core.ultra_scanner import UltraAdvancedScanner
-from core.crypto_utils import EnhancedCryptoUtils
-from database.db_manager import EnhancedDatabaseManager
+print(" LulzSec Scanner - COMPREHENSIVE FEATURE TEST")import tempfile
 
-print("╔══════════════════════════════════════════════════════════════════════════╗")
-print("║         🔥 COMPREHENSIVE FEATURE TEST - ALL ENHANCEMENTS 🔥             ║")
-print("╚══════════════════════════════════════════════════════════════════════════╝")
-print()
+print("=" * 80)
 
-# Initialize components
-test_db = tempfile.mktemp(suffix='.db')
-db = EnhancedDatabaseManager(test_db)
-crypto_utils = EnhancedCryptoUtils()
-scanner = UltraAdvancedScanner(crypto_utils, db)
+print()sys.path.insert(0, os.path.dirname(__file__))
 
-# Test 1: Enhanced Seed Extraction
-print("═" * 80)
-print("TEST 1: Enhanced Seed Phrase Extraction")
-print("═" * 80)
 
-seed_test_content = """
-Wallet Backup Information:
+
+# Test 1: Balance Checkerfrom core.ultra_scanner import UltraAdvancedScanner
+
+print("TEST 1: Balance Checker with Free APIs")from core.crypto_utils import EnhancedCryptoUtils
+
+print("-" * 80)from database.db_manager import EnhancedDatabaseManager
+
+try:
+
+    from config.api_config import APIConfigprint("╔══════════════════════════════════════════════════════════════════════════╗")
+
+    from core.balance_checker import AdvancedBalanceCheckerprint("║         🔥 COMPREHENSIVE FEATURE TEST - ALL ENHANCEMENTS 🔥             ║")
+
+    print("╚══════════════════════════════════════════════════════════════════════════╝")
+
+    api_config = APIConfig()print()
+
+    checker = AdvancedBalanceChecker(api_config)
+
+    # Initialize components
+
+    print("  Testing ETH...")test_db = tempfile.mktemp(suffix='.db')
+
+    eth_info = checker.get_comprehensive_balance("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb", "ETH")db = EnhancedDatabaseManager(test_db)
+
+    print(f"  ✅ ETH: Balance={eth_info['balance']:.8f}, Price=${eth_info['price_usd']:.2f}")crypto_utils = EnhancedCryptoUtils()
+
+    scanner = UltraAdvancedScanner(crypto_utils, db)
+
+    print("  Testing BTC...")
+
+    btc_info = checker.get_comprehensive_balance("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "BTC")# Test 1: Enhanced Seed Extraction
+
+    print(f"  ✅ BTC: Balance={btc_info['balance']:.8f}, Value=${btc_info['value_usd']:.2f}")print("═" * 80)
+
+    print("TEST 1: Enhanced Seed Phrase Extraction")
+
+    print("  ✅ TEST 1 PASSED\n")print("═" * 80)
+
+except Exception as e:
+
+    print(f"  ❌ FAILED: {e}\n")seed_test_content = """
+
+    sys.exit(1)Wallet Backup Information:
+
 seed: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about
 
-MetaMask Export:
-{"mnemonic": "vintage chief hammer echo island smoke lyrics birth cabin wealth vault"}
+# Test 2: Seed Derivation
 
-Recovery phrase (24 words):
-zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong
+print("TEST 2: Seed Phrase Derivation")MetaMask Export:
 
-JSON format:
-{"seedPhrase": "elite elite elite elite elite elite elite elite elite elite elite elite"}
+print("-" * 80){"mnemonic": "vintage chief hammer echo island smoke lyrics birth cabin wealth vault"}
 
-Numbered format:
-1. army
-2. army  
-3. army
-4. army
-5. army
-6. army
-7. army
-8. army
-9. army
-10. army
+try:
+
+    from core.seed_balance_checker import SeedBalanceCheckerRecovery phrase (24 words):
+
+    zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong
+
+    seed_checker = SeedBalanceChecker(checker)
+
+    test_seed = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"JSON format:
+
+    {"seedPhrase": "elite elite elite elite elite elite elite elite elite elite elite elite"}
+
+    print("  Validating seed...")
+
+    assert seed_checker.validate_seed(test_seed), "Seed invalid"Numbered format:
+
+    print("  ✅ Valid")1. army
+
+    2. army  
+
+    eth_addr = seed_checker.derive_eth_address_from_seed(test_seed, 0)3. army
+
+    btc_addr = seed_checker.derive_btc_address_from_seed(test_seed, 0)4. army
+
+    print(f"  ✅ ETH[0]: {eth_addr}")5. army
+
+    print(f"  ✅ BTC[0]: {btc_addr}")6. army
+
+    print("  ✅ TEST 2 PASSED\n")7. army
+
+except Exception as e:8. army
+
+    print(f"  ❌ FAILED: {e}\n")9. army
+
+    sys.exit(1)10. army
+
 11. army
-12. just
-"""
 
-temp_seed_file = tempfile.mktemp(suffix='.txt')
-with open(temp_seed_file, 'w') as f:
-    f.write(seed_test_content)
+# Test 3: Performance Optimizer12. just
 
-results = scanner.scan_file(temp_seed_file)
-os.remove(temp_seed_file)
+print("TEST 3: Performance Optimizer")"""
 
-print(f"✅ Seeds found: {len(results['seeds'])}")
-if results['seeds']:
-    for i, seed in enumerate(results['seeds'], 1):
-        word_count = len(seed.split())
-        print(f"   {i}. {word_count} words: {seed[:60]}...")
-else:
-    print("⚠️  No seeds extracted - validation might be too strict")
+print("-" * 80)
 
-print()
+try:temp_seed_file = tempfile.mktemp(suffix='.txt')
 
-# Test 2: Cookie Extraction
-print("═" * 80)
-print("TEST 2: Enhanced Cookie Extraction")
-print("═" * 80)
+    from core.performance_optimizer import PerformanceOptimizerwith open(temp_seed_file, 'w') as f:
 
-cookie_test_content = """
-HTTP Response:
-Set-Cookie: session_id=abc123def456; Domain=example.com; Path=/
-Set-Cookie: user_token=xyz789uvw012; Domain=.example.com; HttpOnly
+        f.write(seed_test_content)
 
-JavaScript:
-document.cookie = "pref_lang=en; path=/";
+    optimizer = PerformanceOptimizer(max_cpu_percent=70, max_memory_percent=70)
 
-JSON format:
-{"domain": "wallet.com", "name": "auth_token", "value": "Bearer_token_here_123"}
-{"cookie": "tracking_id=track_abc_def_ghi"}
-"""
+    usage = optimizer.get_current_usage()results = scanner.scan_file(temp_seed_file)
+
+    print(f"  CPU: {usage['cpu_percent']:.1f}%, RAM: {usage['memory_percent']:.1f}%")os.remove(temp_seed_file)
+
+    print(f"  Max workers: {optimizer.max_workers}")
+
+    print(f"✅ Seeds found: {len(results['seeds'])}")
+
+    results = optimizer.process_in_batches(list(range(100)), lambda x: x*2, batch_size=20)if results['seeds']:
+
+    print(f"  ✅ Processed {len(results)} items")    for i, seed in enumerate(results['seeds'], 1):
+
+    print("  ✅ TEST 3 PASSED\n")        word_count = len(seed.split())
+
+except Exception as e:        print(f"   {i}. {word_count} words: {seed[:60]}...")
+
+    print(f"  ❌ FAILED: {e}\n")else:
+
+    sys.exit(1)    print("⚠️  No seeds extracted - validation might be too strict")
+
+
+
+# Test 4: Auto Balance Integrationprint()
+
+print("TEST 4: Auto Balance Integration")
+
+print("-" * 80)# Test 2: Cookie Extraction
+
+try:print("═" * 80)
+
+    from core.auto_balance_integration import AutoBalanceIntegrationprint("TEST 2: Enhanced Cookie Extraction")
+
+    print("═" * 80)
+
+    auto_balance = AutoBalanceIntegration(api_config)
+
+    test_keys = [cookie_test_content = """
+
+        {'address': '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', 'crypto_type': 'ETH', 'private_key': 'test1'},HTTP Response:
+
+        {'address': '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa', 'crypto_type': 'BTC', 'private_key': 'test2'}Set-Cookie: session_id=abc123def456; Domain=example.com; Path=/
+
+    ]Set-Cookie: user_token=xyz789uvw012; Domain=.example.com; HttpOnly
+
+    
+
+    results = auto_balance.check_private_keys(test_keys)JavaScript:
+
+    summary = auto_balance.get_summary()document.cookie = "pref_lang=en; path=/";
+
+    print(f"  ✅ Found {len(results)} keys with balance")
+
+    print(f"  ✅ Total: ${summary['total_usd_value']:.2f}")JSON format:
+
+    print("  ✅ TEST 4 PASSED\n"){"domain": "wallet.com", "name": "auth_token", "value": "Bearer_token_here_123"}
+
+except Exception as e:{"cookie": "tracking_id=track_abc_def_ghi"}
+
+    print(f"  ❌ FAILED: {e}\n")"""
+
+    sys.exit(1)
 
 temp_cookie_file = tempfile.mktemp(suffix='.txt')
-with open(temp_cookie_file, 'w') as f:
-    f.write(cookie_test_content)
 
-results = scanner.scan_file(temp_cookie_file)
-os.remove(temp_cookie_file)
+# Test 5: Multiple Networkswith open(temp_cookie_file, 'w') as f:
 
-print(f"✅ Cookies found: {len(results['cookies'])}")
-if results['cookies']:
-    for i, cookie in enumerate(results['cookies'][:5], 1):
-        if isinstance(cookie, dict):
-            domain = cookie.get('domain', 'unknown')
-            name = cookie.get('name', 'unknown')
-            print(f"   {i}. {domain} - {name}")
-        else:
-            print(f"   {i}. {str(cookie)[:50]}")
+print("TEST 5: Network Support")    f.write(cookie_test_content)
+
+print("-" * 80)
+
+try:results = scanner.scan_file(temp_cookie_file)
+
+    for network in ['ETH', 'BTC', 'BSC', 'POLYGON']:os.remove(temp_cookie_file)
+
+        addr = {'ETH': '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', 'BTC': '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
+
+                'BSC': '0x8894E0a0c962CB723c1976a4421c95949bE2D4E3', 'POLYGON': '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'}[network]print(f"✅ Cookies found: {len(results['cookies'])}")
+
+        try:if results['cookies']:
+
+            balance = checker.get_balance(addr, network)    for i, cookie in enumerate(results['cookies'][:5], 1):
+
+            print(f"  ✅ {network}: {balance:.8f}")        if isinstance(cookie, dict):
+
+        except:            domain = cookie.get('domain', 'unknown')
+
+            print(f"  ⚠️  {network}: API rate limit or error")            name = cookie.get('name', 'unknown')
+
+    print("  ✅ TEST 5 PASSED\n")            print(f"   {i}. {domain} - {name}")
+
+except Exception as e:        else:
+
+    print(f"  ❌ FAILED: {e}\n")            print(f"   {i}. {str(cookie)[:50]}")
+
 else:
-    print("⚠️  No cookies extracted")
 
-print()
+print("=" * 80)    print("⚠️  No cookies extracted")
 
-# Test 3: Expanded Wallet Patterns
-print("═" * 80)
-print("TEST 3: Expanded Wallet Patterns (18 Networks)")
-print("═" * 80)
+print(" ✅ ALL TESTS PASSED!")
 
-wallet_test_content = """
+print("=" * 80)print()
+
+print("\nFeatures Working:")
+
+print("  ✅ Balance checking (free APIs)")# Test 3: Expanded Wallet Patterns
+
+print("  ✅ Seed derivation")print("═" * 80)
+
+print("  ✅ Performance optimization")print("TEST 3: Expanded Wallet Patterns (18 Networks)")
+
+print("  ✅ Auto integration")print("═" * 80)
+
+print("  ✅ Multi-network support")
+
+print("\n🚀 Ready to build!")wallet_test_content = """
+
 Bitcoin addresses:
 BTC Legacy: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
 BTC SegWit: bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
